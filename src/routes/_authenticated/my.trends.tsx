@@ -20,6 +20,10 @@ const COLOR_RENTAL = "oklch(0.62 0.20 265)";
 const COLOR_STOCK = "oklch(0.68 0.14 200)";
 const COLOR_NEW = "oklch(0.70 0.16 145)";
 
+const CHART_MARGIN = { top: 8, right: 16, left: 4, bottom: 0 };
+const DUAL_AXIS_MARGIN = { top: 8, right: 16, left: 8, bottom: 0 };
+const Y_AXIS_WIDTH = 44;
+
 // "2026-06" → "6월" (첫 표시 또는 1월에는 "26/6"로 연도 표기)
 const makeTickFmt = (firstKey?: string) => (v: string) => {
   const [y, m] = v.split("-");
@@ -79,10 +83,10 @@ export function MyTrendsPage() {
         <CardContent className="h-64">
           {isLoading ? <Loading /> : (
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={months} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+              <LineChart data={months} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={tickFmt} interval="preserveStartEnd" minTickGap={16} />
-                <YAxis tick={{ fontSize: 11 }} unit="%" domain={["auto", "auto"]} />
+                <YAxis tick={{ fontSize: 11 }} unit="%" domain={["auto", "auto"]} width={Y_AXIS_WIDTH} tickMargin={4} />
                 <Tooltip formatter={(v: any) => [`${v}%`, "렌탈비율"]} />
                 <ReferenceLine y={s?.avgRentalRate ?? 0} stroke="hsl(var(--border))" strokeDasharray="4 4" />
                 <Line type="monotone" dataKey="rentalRate" stroke={COLOR_RENTAL} strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
@@ -103,7 +107,7 @@ export function MyTrendsPage() {
         <CardContent className="h-64">
           {isLoading ? <Loading /> : (
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={months} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+              <AreaChart data={months} margin={CHART_MARGIN}>
                 <defs>
                   <linearGradient id="gStock" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={COLOR_STOCK} stopOpacity={0.6} />
@@ -112,7 +116,7 @@ export function MyTrendsPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={tickFmt} interval="preserveStartEnd" minTickGap={16} />
-                <YAxis tick={{ fontSize: 11 }} unit="%" />
+                <YAxis tick={{ fontSize: 11 }} unit="%" width={Y_AXIS_WIDTH} tickMargin={4} />
                 <Tooltip formatter={(v: any) => [`${v}%`, "재고비율"]} />
                 <Area type="monotone" dataKey="stockRate" stroke={COLOR_STOCK} strokeWidth={2.5} fill="url(#gStock)" />
               </AreaChart>
@@ -132,11 +136,11 @@ export function MyTrendsPage() {
         <CardContent className="h-72">
           {isLoading ? <Loading /> : (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={months} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+              <ComposedChart data={months} margin={DUAL_AXIS_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={tickFmt} interval="preserveStartEnd" minTickGap={16} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} width={32} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} width={32} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} width={Y_AXIS_WIDTH} tickMargin={4} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} width={Y_AXIS_WIDTH} tickMargin={4} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar yAxisId="left" dataKey="newRenters" name="신규 거래처" radius={[4, 4, 0, 0]} fill={COLOR_NEW} />
