@@ -81,26 +81,52 @@ function AuthPage() {
 
   async function adminSignIn(e: React.FormEvent) {
     e.preventDefault();
+    const em = email.trim();
+    if (!em || !pw) {
+      toast.error("이메일과 비밀번호를 입력하세요.");
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    persist(ADMIN_KEY, rememberAdmin, email, pw);
-    toast.success("로그인 성공");
-    nav({ to: "/" });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      persist(ADMIN_KEY, rememberAdmin, em, pw);
+      toast.success("로그인 성공");
+      nav({ to: "/" });
+    } catch (err: any) {
+      toast.error(err?.message ?? "로그인 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function adminSignUp(e: React.FormEvent) {
     e.preventDefault();
+    const em = email.trim();
+    if (!em || !pw) {
+      toast.error("이메일과 비밀번호를 입력하세요.");
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password: pw,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("가입 완료. 로그인하세요.");
+    try {
+      const { error } = await supabase.auth.signUp({
+        email: em,
+        password: pw,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      toast.success("가입 완료. Sign In 탭에서 로그인하세요.");
+    } catch (err: any) {
+      toast.error(err?.message ?? "가입 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -217,14 +243,18 @@ function AuthPage() {
                     <Field id="e1" label="이메일" type="email" value={email} onChange={setEmail} autoComplete="username" />
                     <Field id="p1" label="비밀번호" type="password" value={pw} onChange={setPw} autoComplete="current-password" />
                     <RememberMe id="ra" checked={rememberAdmin} onChange={setRememberAdmin} />
-                    <Button type="submit" disabled={loading} className="w-full h-11">Sign In</Button>
+                    <Button type="submit" disabled={loading || !email || !pw} className="w-full h-11">
+                      {loading ? "처리 중..." : "Sign In"}
+                    </Button>
                   </form>
                 </TabsContent>
                 <TabsContent value="signup">
                   <form onSubmit={adminSignUp} className="space-y-4 pt-5">
                     <Field id="e2" label="이메일" type="email" value={email} onChange={setEmail} autoComplete="username" />
                     <Field id="p2" label="비밀번호" type="password" value={pw} onChange={setPw} autoComplete="new-password" />
-                    <Button type="submit" disabled={loading} className="w-full h-11">Sign Up</Button>
+                    <Button type="submit" disabled={loading || !email || !pw} className="w-full h-11">
+                      {loading ? "처리 중..." : "Sign Up"}
+                    </Button>
                     <p className="text-xs text-muted-foreground">최초 가입자는 관리자 권한을 얻을 수 있습니다.</p>
                   </form>
                 </TabsContent>
