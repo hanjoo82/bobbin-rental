@@ -34,7 +34,7 @@ function loadSaved(key: string): { email: string; password: string } | null {
 
 function AuthPage() {
   const nav = useNavigate();
-  const [mode, setMode] = useState<"owner" | "admin">("admin");
+  const [mode, setMode] = useState<"owner" | "admin">("owner");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
