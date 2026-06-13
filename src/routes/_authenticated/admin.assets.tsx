@@ -23,15 +23,15 @@ function AssetsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-semibold">자산현황</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl sm:text-2xl font-semibold">자산현황</h1>
+          <p className="text-sm text-muted-foreground mt-1 break-keep">
             {label} · 소유주별 × 사이즈별 보유수량 및 이번달 렌탈비율
           </p>
         </div>
         {totals && (
-          <div className="text-right">
+          <div className="flex sm:block items-baseline gap-2 sm:text-right shrink-0">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">전체 렌탈비율</div>
             <div className="font-display text-2xl font-semibold tabular-nums">
               {totals.rentalRate.toFixed(1)}<span className="text-base text-muted-foreground">%</span>
@@ -41,44 +41,50 @@ function AssetsPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="pb-3">
           <CardTitle className="text-base">매트릭스</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0 sm:p-6 sm:pt-0">
           {isLoading ? (
-            <div className="text-sm text-muted-foreground py-8 text-center">불러오는 중...</div>
+            <div className="text-sm text-muted-foreground py-8 text-center px-4">불러오는 중...</div>
           ) : rows.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-8 text-center">데이터가 없습니다.</div>
+            <div className="text-sm text-muted-foreground py-8 text-center px-4">데이터가 없습니다.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+              <table className="w-max min-w-full text-sm border-collapse">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="text-left p-3 font-medium">소유주</th>
+                    <th className="sticky left-0 z-20 bg-muted/50 text-left px-3 py-2.5 sm:p-3 font-medium min-w-[7.5rem] sm:min-w-[9rem] whitespace-nowrap border-r border-border">
+                      소유주
+                    </th>
                     {sizes.map((s) => (
-                      <th key={s} className="text-right p-3 font-medium whitespace-nowrap">{s}</th>
+                      <th key={s} className="text-right px-2 py-2.5 sm:px-3 sm:p-3 font-medium whitespace-nowrap min-w-[3.5rem] sm:min-w-[4.5rem]">
+                        {s}
+                      </th>
                     ))}
-                    <th className="text-right p-3 font-medium border-l">합계</th>
-                    <th className="text-right p-3 font-medium">렌탈수</th>
-                    <th className="text-right p-3 font-medium">렌탈비율</th>
+                    <th className="text-right px-2 py-2.5 sm:px-3 sm:p-3 font-medium whitespace-nowrap min-w-[3rem] border-l">합계</th>
+                    <th className="text-right px-2 py-2.5 sm:px-3 sm:p-3 font-medium whitespace-nowrap min-w-[3.25rem]">렌탈수</th>
+                    <th className="text-right px-3 py-2.5 sm:p-3 font-medium whitespace-nowrap min-w-[3.75rem]">렌탈비율</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.owner_id} className="border-b hover:bg-muted/30">
-                      <td className="p-3 font-medium">{r.owner_name}</td>
+                    <tr key={r.owner_id} className="group border-b hover:bg-muted/30">
+                      <td className="sticky left-0 z-10 bg-background group-hover:bg-muted/30 px-3 py-2.5 sm:p-3 font-medium min-w-[7.5rem] sm:min-w-[9rem] max-w-[11rem] whitespace-nowrap border-r border-border">
+                        {r.owner_name}
+                      </td>
                       {sizes.map((s) => (
-                        <td key={s} className="text-right p-3 tabular-nums text-muted-foreground">
+                        <td key={s} className="text-right px-2 py-2.5 sm:px-3 sm:p-3 tabular-nums text-muted-foreground whitespace-nowrap">
                           {r.bySize[s] ? r.bySize[s].toLocaleString() : "—"}
                         </td>
                       ))}
-                      <td className="text-right p-3 tabular-nums font-medium border-l">
+                      <td className="text-right px-2 py-2.5 sm:px-3 sm:p-3 tabular-nums font-medium border-l whitespace-nowrap">
                         {r.total.toLocaleString()}
                       </td>
-                      <td className="text-right p-3 tabular-nums text-muted-foreground">
+                      <td className="text-right px-2 py-2.5 sm:px-3 sm:p-3 tabular-nums text-muted-foreground whitespace-nowrap">
                         {r.rentalCount.toLocaleString()}
                       </td>
-                      <td className="text-right p-3 tabular-nums font-semibold">
+                      <td className="text-right px-3 py-2.5 sm:p-3 tabular-nums font-semibold whitespace-nowrap">
                         <span className={r.rentalRate >= 50 ? "text-emerald-600" : r.rentalRate >= 30 ? "text-amber-600" : "text-muted-foreground"}>
                           {r.rentalRate.toFixed(1)}%
                         </span>
@@ -89,19 +95,21 @@ function AssetsPage() {
                 {totals && (
                   <tfoot>
                     <tr className="border-t-2 bg-muted/60 font-semibold">
-                      <td className="p-3">총합계</td>
+                      <td className="sticky left-0 z-10 bg-muted/60 px-3 py-2.5 sm:p-3 whitespace-nowrap min-w-[7.5rem] sm:min-w-[9rem] border-r border-border">
+                        총합계
+                      </td>
                       {sizes.map((s) => (
-                        <td key={s} className="text-right p-3 tabular-nums">
+                        <td key={s} className="text-right px-2 py-2.5 sm:px-3 sm:p-3 tabular-nums whitespace-nowrap">
                           {(totals.bySize[s] ?? 0).toLocaleString()}
                         </td>
                       ))}
-                      <td className="text-right p-3 tabular-nums border-l">
+                      <td className="text-right px-2 py-2.5 sm:px-3 sm:p-3 tabular-nums border-l whitespace-nowrap">
                         {totals.total.toLocaleString()}
                       </td>
-                      <td className="text-right p-3 tabular-nums">
+                      <td className="text-right px-2 py-2.5 sm:px-3 sm:p-3 tabular-nums whitespace-nowrap">
                         {totals.rentalCount.toLocaleString()}
                       </td>
-                      <td className="text-right p-3 tabular-nums">
+                      <td className="text-right px-3 py-2.5 sm:p-3 tabular-nums whitespace-nowrap">
                         {totals.rentalRate.toFixed(1)}%
                       </td>
                     </tr>
@@ -109,6 +117,11 @@ function AssetsPage() {
                 )}
               </table>
             </div>
+          )}
+          {rows.length > 0 && sizes.length > 2 && (
+            <p className="sm:hidden px-4 pb-3 pt-2 text-[11px] text-muted-foreground">
+              ← 좌우로 스크롤하면 사이즈·합계 열을 볼 수 있습니다.
+            </p>
           )}
         </CardContent>
       </Card>
