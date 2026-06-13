@@ -26,10 +26,11 @@ function Index() {
   const fetchMe = useServerFn(getMe);
   const promote = useServerFn(promoteSelfToAdmin);
 
-  const { data: me, refetch, isLoading: meLoading } = useQuery({
+  const { data: me, refetch, isLoading: meLoading, isError: meIsError, error: meError } = useQuery({
     queryKey: ["me"],
     queryFn: () => fetchMe(),
     enabled: !!user,
+    retry: 1,
   });
 
   // Not signed in → go straight to login
@@ -45,6 +46,28 @@ function Index() {
   }, [me, nav]);
 
   if (loading || !user) return <Center>이동 중...</Center>;
+  if (meIsError) {
+    const msg = meError instanceof Error ? meError.message : "권한 확인에 실패했습니다.";
+    return (
+      <div className="min-h-screen grid place-items-center px-4">
+        <Card className="max-w-lg w-full">
+          <CardHeader><CardTitle>로그인 후 처리 실패</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{msg}</p>
+            <p className="text-sm text-muted-foreground">
+              Vercel에 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`가 모두 설정돼 있는지 확인하세요.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={() => refetch()}>다시 시도</Button>
+              <Button variant="outline" onClick={async () => { await supabase.auth.signOut(); nav({ to: "/auth" as any }); }}>
+                로그아웃
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   if (meLoading || !me) return <Center>권한 확인 중...</Center>;
   if (me.isAdmin || me.isOwner) return <Center>이동 중...</Center>;
 

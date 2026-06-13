@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ownerInitPasswordIfNeeded } from "@/lib/admin.functions";
+import { ownerInitPasswordIfNeeded, registerAdminAccount } from "@/lib/admin.functions";
+import { formatAuthError } from "@/lib/auth-errors";
 import { Sparkles, Activity, TrendingUp, Package } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
@@ -32,10 +33,12 @@ function loadSaved(key: string): { email: string; password: string } | null {
 
 function AuthPage() {
   const nav = useNavigate();
-  const [mode, setMode] = useState<"owner" | "admin">("owner");
+  const [mode, setMode] = useState<"owner" | "admin">("admin");
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const initPw = useServerFn(ownerInitPasswordIfNeeded);
+  const registerAdmin = useServerFn(registerAdminAccount);
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPw, setOwnerPw] = useState("");
   const [rememberOwner, setRememberOwner] = useState(false);
@@ -59,6 +62,7 @@ function AuthPage() {
 
   async function ownerSignIn(e: React.FormEvent) {
     e.preventDefault();
+    setFormError(null);
     setLoading(true);
     try {
       const em = ownerEmail.trim().toLowerCase();
@@ -69,11 +73,14 @@ function AuthPage() {
         res = await supabase.auth.signInWithPassword({ email: em, password: ownerPw });
         if (res.error) throw res.error;
       }
+      if (!res.data.session) throw new Error("로그인 세션을 만들 수 없습니다.");
       persist(OWNER_KEY, rememberOwner, em, ownerPw);
       toast.success("로그인 성공");
       nav({ to: "/" });
     } catch (err: any) {
-      toast.error(`로그인 실패: ${err.message ?? err}`);
+      const msg = formatAuthError(err.message ?? String(err));
+      setFormError(msg);
+      toast.error(`로그인 실패: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -81,23 +88,36 @@ function AuthPage() {
 
   async function adminSignIn(e: React.FormEvent) {
     e.preventDefault();
-    const em = email.trim();
+    setFormError(null);
+    const em = email.trim().toLowerCase();
     if (!em || !pw) {
-      toast.error("이메일과 비밀번호를 입력하세요.");
+      const msg = "이메일과 비밀번호를 입력하세요.";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+      const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
       if (error) {
-        toast.error(error.message);
+        const msg = formatAuthError(error.message);
+        setFormError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (!data.session) {
+        const msg = "로그인 세션을 만들 수 없습니다. 이메일 인증을 완료했는지 확인하세요.";
+        setFormError(msg);
+        toast.error(msg);
         return;
       }
       persist(ADMIN_KEY, rememberAdmin, em, pw);
       toast.success("로그인 성공");
       nav({ to: "/" });
     } catch (err: any) {
-      toast.error(err?.message ?? "로그인 중 오류가 발생했습니다.");
+      const msg = formatAuthError(err?.message ?? "로그인 중 오류가 발생했습니다.");
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -105,25 +125,29 @@ function AuthPage() {
 
   async function adminSignUp(e: React.FormEvent) {
     e.preventDefault();
-    const em = email.trim();
+    setFormError(null);
+    const em = email.trim().toLowerCase();
     if (!em || !pw) {
-      toast.error("이메일과 비밀번호를 입력하세요.");
+      const msg = "이메일과 비밀번호를 입력하세요.";
+      setFormError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (pw.length < 6) {
+      const msg = "비밀번호는 6자 이상이어야 합니다.";
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signUp({
-        email: em,
-        password: pw,
-        options: { emailRedirectTo: window.location.origin },
-      });
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+      await registerAdmin({ data: { email: em, password: pw } });
       toast.success("가입 완료. Sign In 탭에서 로그인하세요.");
+      setPw("");
     } catch (err: any) {
-      toast.error(err?.message ?? "가입 중 오류가 발생했습니다.");
+      const msg = formatAuthError(err?.message ?? "가입 중 오류가 발생했습니다.");
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -261,10 +285,16 @@ function AuthPage() {
               </Tabs>
             )}
 
+            {formError ? (
+              <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+                {formError}
+              </p>
+            ) : null}
+
             <div className="mt-8 pt-6 border-t border-border flex items-center justify-end text-sm">
               <button
                 type="button"
-                onClick={() => setMode(mode === "owner" ? "admin" : "owner")}
+                onClick={() => { setFormError(null); setMode(mode === "owner" ? "admin" : "owner"); }}
                 className="text-primary hover:underline font-medium text-xs tracking-wide uppercase"
               >
                 {mode === "owner" ? "Admin Access" : "Partner Log in"}

@@ -166,6 +166,33 @@ export const ownerInitPasswordIfNeeded = createServerFn({ method: "POST" })
     return { already_set: false };
   });
 
+/** Public admin registration — creates a confirmed auth user (no email confirmation step). */
+export const registerAdminAccount = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({
+      email: z.string().email().max(200),
+      password: z.string().min(6).max(72),
+    }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const email = data.email.trim().toLowerCase();
+
+    const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    if (listErr) throw new Error(listErr.message);
+
+    const found = list?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
+    if (found) throw new Error("이미 가입된 이메일입니다. Sign In 탭에서 로그인하세요.");
+
+    const { error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password: data.password,
+      email_confirm: true,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true };
+  });
+
 export const promoteSelfToAdmin = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
