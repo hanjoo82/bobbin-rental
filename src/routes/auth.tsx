@@ -10,7 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ownerInitPasswordIfNeeded, registerAdminAccount, prepareAdminLogin } from "@/lib/admin.functions";
 import { formatAuthError } from "@/lib/auth-errors";
+import { cn } from "@/lib/utils";
 import { Sparkles, Activity, TrendingUp, Package } from "lucide-react";
+
+const SOLE_LOGO = "/brand/sole-logo.png";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "로그인 — 보빈 렌탈 관리" }] }),
@@ -186,12 +189,11 @@ function AuthPage() {
           }} />
         </div>
 
-        <div className="relative z-10 flex items-center gap-2 font-display font-semibold text-foreground">
-          <span className="w-9 h-9 rounded-xl grid place-items-center text-sm shadow-md text-white"
-                style={{ background: "linear-gradient(135deg, oklch(0.60 0.20 277), oklch(0.50 0.22 290))" }}>
-            B
-          </span>
-          <span>Bobbin</span>
+        <div className="relative z-10 space-y-3">
+          <BrandLogo variant="hero" />
+          <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground/75">
+            Bobbin Rental · Asset Intelligence
+          </p>
         </div>
 
         <div className="relative z-10 max-w-md space-y-8">
@@ -220,26 +222,25 @@ function AuthPage() {
         </div>
 
         <div className="relative z-10 text-[11px] text-muted-foreground/70">
-          © Bobbin Operations · 실시간 자산 인텔리전스
+          © SOLE Management Consulting Group
         </div>
       </div>
 
       {/* Form panel */}
       <div className="relative z-10 flex items-center justify-center px-6 py-12 lg:px-16 lg:bg-background">
         <div className="w-full max-w-sm">
-          {/* Mobile: logo + AI badge */}
+          {/* Mobile: brand mark */}
           <div className="mb-8 lg:hidden space-y-4 text-center">
-            <div className="inline-flex items-center gap-2 font-display font-semibold text-foreground">
-              <span className="w-9 h-9 rounded-xl grid place-items-center text-sm shadow-md text-white"
-                    style={{ background: "linear-gradient(135deg, oklch(0.60 0.20 277), oklch(0.50 0.22 290))" }}>
-                B
-              </span>
-              <span>Bobbin</span>
-            </div>
+            <BrandLogo variant="mobile" className="mx-auto" />
             <div className="inline-flex items-center gap-2 rounded-full border border-indigo-200/60 bg-white/70 backdrop-blur px-3 py-1 text-[11px] text-indigo-700">
               <Sparkles className="w-3 h-3" />
               <span>AI 자산 인텔리전스</span>
             </div>
+          </div>
+
+          {/* Desktop: brand above form */}
+          <div className="hidden lg:block mb-10">
+            <BrandLogo variant="form" />
           </div>
 
           {/* Form card — light glass on mobile, plain on desktop */}
@@ -311,6 +312,31 @@ function AuthPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BrandLogo({ variant = "form", className }: { variant?: "hero" | "form" | "mobile"; className?: string }) {
+  const sizes = {
+    hero: "h-[52px] lg:h-[60px] max-w-[280px]",
+    form: "h-[44px] max-w-[240px]",
+    mobile: "h-[40px] max-w-[220px]",
+  } as const;
+
+  const frame = variant === "mobile"
+    ? "rounded-2xl border border-slate-200/70 bg-white/95 px-5 py-3.5 shadow-[0_12px_40px_-24px_oklch(0.45_0.08_270/0.35)]"
+    : variant === "hero"
+      ? "rounded-2xl border border-white/80 bg-white/75 backdrop-blur-sm px-5 py-3 shadow-sm"
+      : "";
+
+  return (
+    <div className={cn("w-fit", frame, className)}>
+      <img
+        src={SOLE_LOGO}
+        alt="SOLE Management Consulting Group"
+        className={cn("w-auto object-contain object-left", sizes[variant])}
+        draggable={false}
+      />
     </div>
   );
 }
