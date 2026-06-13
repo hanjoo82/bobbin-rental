@@ -12,6 +12,7 @@ import { listOwners } from "@/lib/admin.functions";
 import { OwnerScopeProvider } from "@/lib/owner-scope";
 import { LayoutDashboard, Settings, Building2, LogOut, TrendingUp, Package } from "lucide-react";
 import { SegmentedTabs } from "./my";
+import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: AdminLayout,
@@ -58,9 +59,9 @@ function AdminLayout() {
     <div className="min-h-screen bg-muted/30">
       <header className="border-b bg-background/80 backdrop-blur sticky top-0 z-30">
         <div className="container mx-auto px-4 h-14 grid grid-cols-[auto_1fr_auto] items-center gap-4">
-          <Link to="/admin" className="flex items-center gap-2 font-display font-semibold shrink-0">
-            <span className="w-7 h-7 rounded-md bg-brand-gradient grid place-items-center text-primary-foreground text-xs">B</span>
-            <span className="hidden sm:inline">관리자</span>
+          <Link to="/admin" className="flex items-center gap-2 font-display font-semibold shrink-0 min-w-0">
+            <BrandLogo variant="header" />
+            <span className="hidden sm:inline truncate">관리자</span>
           </Link>
           <nav className="flex justify-center min-w-0">
             <SegmentedTabs items={NAV} />

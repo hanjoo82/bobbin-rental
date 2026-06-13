@@ -10,10 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ownerInitPasswordIfNeeded, registerAdminAccount, prepareAdminLogin } from "@/lib/admin.functions";
 import { formatAuthError } from "@/lib/auth-errors";
-import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand-logo";
 import { Sparkles, Activity, TrendingUp, Package } from "lucide-react";
-
-const SOLE_LOGO = "/brand/sole-logo.png";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "로그인 — 보빈 렌탈 관리" }] }),
@@ -312,31 +310,6 @@ function AuthPage() {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function BrandLogo({ variant = "form", className }: { variant?: "hero" | "form" | "mobile"; className?: string }) {
-  const sizes = {
-    hero: "h-[52px] lg:h-[60px] max-w-[280px]",
-    form: "h-[44px] max-w-[240px]",
-    mobile: "h-[40px] max-w-[220px]",
-  } as const;
-
-  const frame = variant === "mobile"
-    ? "rounded-2xl border border-slate-200/70 bg-white/95 px-5 py-3.5 shadow-[0_12px_40px_-24px_oklch(0.45_0.08_270/0.35)]"
-    : variant === "hero"
-      ? "rounded-2xl border border-white/80 bg-white/75 backdrop-blur-sm px-5 py-3 shadow-sm"
-      : "";
-
-  return (
-    <div className={cn("w-fit", frame, className)}>
-      <img
-        src={SOLE_LOGO}
-        alt="SOLE Management Consulting Group"
-        className={cn("w-auto object-contain object-left", sizes[variant])}
-        draggable={false}
-      />
     </div>
   );
 }
