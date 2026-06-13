@@ -51,40 +51,6 @@ function extractSido(addr: string | null | undefined): string | null {
 }
 
 /**
- * 지역별 보유/렌탈 분포
- */
-export const regionStats = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ owner_id: z.string().uuid().optional() }).parse(d ?? {}))
-  .handler(async ({ data, context }) => {
-    const rows = await fetchAllRows<{ address: string | null; lat: number | null; status_category: string }>(
-      () => {
-        let q = context.supabase.from("products").select("address, lat, status_category");
-        if (data.owner_id) q = q.eq("owner_id", data.owner_id);
-        return q;
-      },
-    );
-
-    const byRegion = new Map<string, { sido: string; total: number; rental: number; noGeo: number }>();
-    let unknown = 0;
-    let noGeoTotal = 0;
-    for (const r of rows ?? []) {
-      const sido = extractSido(r.address as string | null);
-      if (!sido) { unknown++; continue; }
-      const e = byRegion.get(sido) ?? { sido, total: 0, rental: 0, noGeo: 0 };
-      e.total++;
-      if (r.status_category === "rental") e.rental++;
-      if (r.lat == null) { e.noGeo++; noGeoTotal++; }
-      byRegion.set(sido, e);
-    }
-    const regions = Array.from(byRegion.values())
-      .map((e) => ({ ...e, rate: e.total > 0 ? e.rental / e.total : 0 }))
-      .sort((a, b) => b.total - a.total);
-
-    return { regions, unknown, noGeoTotal, totalProducts: rows?.length ?? 0 };
-  });
-
-/**
  * 지역별 분포: 렌탈 / 본사 재고 / 물류센터 재고 / 회수대상
  */
 export const regionBreakdown = createServerFn({ method: "GET" })

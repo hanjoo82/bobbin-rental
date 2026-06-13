@@ -14,30 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      geocode_cache: {
-        Row: {
-          address: string
-          created_at: string
-          lat: number | null
-          lng: number | null
-          status: string | null
-        }
-        Insert: {
-          address: string
-          created_at?: string
-          lat?: number | null
-          lng?: number | null
-          status?: string | null
-        }
-        Update: {
-          address?: string
-          created_at?: string
-          lat?: number | null
-          lng?: number | null
-          status?: string | null
-        }
-        Relationships: []
-      }
       owner_accounts: {
         Row: {
           created_at: string
@@ -158,8 +134,6 @@ export type Database = {
           bobbin_size: string | null
           created_at: string
           id: string
-          lat: number | null
-          lng: number | null
           owner_id: string
           product_no: string
           renter_name: string | null
@@ -173,8 +147,6 @@ export type Database = {
           bobbin_size?: string | null
           created_at?: string
           id?: string
-          lat?: number | null
-          lng?: number | null
           owner_id: string
           product_no: string
           renter_name?: string | null
@@ -188,8 +160,6 @@ export type Database = {
           bobbin_size?: string | null
           created_at?: string
           id?: string
-          lat?: number | null
-          lng?: number | null
           owner_id?: string
           product_no?: string
           renter_name?: string | null

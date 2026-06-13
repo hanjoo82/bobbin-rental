@@ -15,7 +15,7 @@ export const listProducts = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     let q = context.supabase
       .from("products")
-      .select("id, owner_id, product_no, bobbin_size, status_category, renter_name, stock_location, address, lat, lng, updated_at, owners(name)")
+      .select("id, owner_id, product_no, bobbin_size, status_category, renter_name, stock_location, address, updated_at, owners(name)")
       .order("updated_at", { ascending: false })
       .limit(2000);
     if (data.owner_id) q = q.eq("owner_id", data.owner_id);
