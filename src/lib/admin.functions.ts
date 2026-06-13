@@ -2,6 +2,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+async function findAuthUserByEmail(supabaseAdmin: any, email: string) {
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw new Error(error.message);
+    const found = data?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
+    if (found) return found;
+    if (!data?.users?.length || data.users.length < 200) break;
+  }
+  return null;
+}
+
 async function assertAdmin(ctx: { supabase: any; userId: string }) {
   const { data, error } = await ctx.supabase
     .rpc("has_role", { _user_id: ctx.userId, _role: "admin" });
@@ -178,10 +189,7 @@ export const registerAdminAccount = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const email = data.email.trim().toLowerCase();
 
-    const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (listErr) throw new Error(listErr.message);
-
-    const found = list?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
+    const found = await findAuthUserByEmail(supabaseAdmin, email);
     if (found) {
       if (!found.email_confirmed_at) {
         const { error: uErr } = await supabaseAdmin.auth.admin.updateUserById(found.id, {
@@ -203,23 +211,27 @@ export const registerAdminAccount = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** Confirm admin email so Sign In works even when Supabase "Confirm email" is enabled. */
-export const confirmAdminEmail = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ email: z.string().email().max(200) }).parse(d))
+/** Confirm email + sync password before admin Sign In (bypasses Supabase Confirm email). */
+export const prepareAdminLogin = createServerFn({ method: "POST" })
+  .inputValidator((d) =>
+    z.object({
+      email: z.string().email().max(200),
+      password: z.string().min(6).max(72),
+    }).parse(d),
+  )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const email = data.email.trim().toLowerCase();
 
-    const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
-    if (listErr) throw new Error(listErr.message);
-
-    const found = list?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
+    const found = await findAuthUserByEmail(supabaseAdmin, email);
     if (!found) throw new Error("가입되지 않은 이메일입니다. Sign Up 탭에서 먼저 가입하세요.");
-    if (found.email_confirmed_at) return { confirmed: true, already_confirmed: true };
 
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(found.id, { email_confirm: true });
-    if (error) throw new Error(error.message);
-    return { confirmed: true, already_confirmed: false };
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(found.id, {
+      email_confirm: true,
+      password: data.password,
+    });
+    if (error) throw new Error(`계정 준비 실패: ${error.message}`);
+    return { ok: true };
   });
 
 export const promoteSelfToAdmin = createServerFn({ method: "POST" })
