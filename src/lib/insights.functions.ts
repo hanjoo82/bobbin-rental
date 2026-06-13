@@ -290,7 +290,7 @@ export const trendsExtended = createServerFn({ method: "GET" })
       newRentals: number;
       returns: number;
       bySize: Record<string, number>;
-      newRenters: number;
+      newRenterNames: Set<string>;
       returnDays: number[];
       rentalRate: number;
       stockRate: number;
@@ -302,7 +302,7 @@ export const trendsExtended = createServerFn({ method: "GET" })
     for (const m of monthKeys) {
       buckets.set(m.key, {
         month: m.key, newRentals: 0, returns: 0, bySize: {},
-        newRenters: 0, returnDays: [], rentalRate: 0, stockRate: 0,
+        newRenterNames: new Set(), returnDays: [], rentalRate: 0, stockRate: 0,
         cumulativeRenters: 0, rentalCount: 0, stockCount: 0,
       });
     }
@@ -343,7 +343,7 @@ export const trendsExtended = createServerFn({ method: "GET" })
         b.bySize[sz] = (b.bySize[sz] ?? 0) + 1;
         sizeTotals.set(sz, (sizeTotals.get(sz) ?? 0) + 1);
         const name = ((h.renter_name as string) ?? "").trim();
-        if (name && firstRenter.get(name) === ts) b.newRenters++;
+        if (name && firstRenter.get(name) === ts) b.newRenterNames.add(name);
       } else if (h.status_category === "in_stock") {
         b.returns++;
         // 이 회수의 직전 rental 시점 찾기
@@ -406,7 +406,7 @@ export const trendsExtended = createServerFn({ method: "GET" })
         net: b.newRentals - b.returns,
         rentalRate: Math.round(b.rentalRate * 1000) / 10, // %
         stockRate: Math.round(b.stockRate * 1000) / 10,
-        newRenters: b.newRenters,
+        newRenters: b.newRenterNames.size,
         cumulativeRenters: b.cumulativeRenters,
         avgReturnDays,
       };

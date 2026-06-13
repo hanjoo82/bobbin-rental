@@ -32,7 +32,7 @@ export function MyTrendsPage() {
   const fetch = useServerFn(trendsExtended);
   const { ownerId } = useOwnerScope();
   const { data, isLoading } = useQuery({
-    queryKey: ["my-trends-ext-v3", ownerId ?? "all"],
+    queryKey: ["my-trends-ext-v4", ownerId ?? "all"],
     queryFn: () => fetch({ data: { months: 12, ...(ownerId ? { owner_id: ownerId } : {}) } }),
   });
 
@@ -132,14 +132,15 @@ export function MyTrendsPage() {
         <CardContent className="h-72">
           {isLoading ? <Loading /> : (
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={months} margin={{ top: 8, right: 16, left: -20, bottom: 0 }}>
+              <ComposedChart data={months} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} tickFormatter={tickFmt} interval="preserveStartEnd" minTickGap={16} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} width={32} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} width={32} />
                 <Tooltip />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="newRenters" name="신규 거래처" radius={[4, 4, 0, 0]} fill={COLOR_NEW} />
-                <Line type="monotone" dataKey="cumulativeRenters" name="누적 거래처" stroke="oklch(0.55 0.18 280)" strokeWidth={2.5} dot={{ r: 3 }} />
+                <Bar yAxisId="left" dataKey="newRenters" name="신규 거래처" radius={[4, 4, 0, 0]} fill={COLOR_NEW} />
+                <Line yAxisId="right" type="monotone" dataKey="cumulativeRenters" name="누적 거래처" stroke="oklch(0.55 0.18 280)" strokeWidth={2.5} dot={{ r: 3 }} />
               </ComposedChart>
             </ResponsiveContainer>
           )}
