@@ -32,6 +32,30 @@ function RentalRateBadge({ rate }: { rate: number }) {
   );
 }
 
+function DarkMetric({ label, value, valueNode, hint }: { label: string; value?: string; valueNode?: React.ReactNode; hint?: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] md:text-[11px] uppercase tracking-wider text-white/50 mb-1">{label}</div>
+      <div className="text-xl md:text-2xl font-display font-semibold tabular-nums leading-tight text-white">
+        {valueNode ?? value}
+      </div>
+      {hint && <div className="text-[11px] text-white/40 mt-0.5">{hint}</div>}
+    </div>
+  );
+}
+
+function darkRentalRateBadge(rate: number) {
+  const cls =
+    rate >= 50 ? "bg-emerald-400/20 text-emerald-200" :
+    rate >= 30 ? "bg-amber-400/20 text-amber-200" :
+    "bg-white/10 text-white/70";
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-sm md:text-base font-semibold tabular-nums ${cls}`}>
+      {rate.toFixed(1)}%
+    </span>
+  );
+}
+
 function AssetsPage() {
   const { ownerId, label } = useOwnerScope();
   const fetchMatrix = useServerFn(assetMatrix);
@@ -44,24 +68,62 @@ function AssetsPage() {
   const rows = (data?.rows ?? []) as MatrixRow[];
   const totals = data?.totals;
 
+  const totalAll = totals?.total ?? 0;
+  const totalRental = totals?.rentalCount ?? 0;
+  const rentalRate = totals?.rentalRate ?? 0;
+  const idleCount = totalAll - totalRental;
+  const topSize =
+    totals && sizes.length > 0
+      ? sizes.reduce((best, s) => ((totals.bySize[s] ?? 0) > (totals.bySize[best] ?? 0) ? s : best), sizes[0])
+      : "—";
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="font-display text-xl sm:text-2xl font-semibold">자산현황</h1>
-          <p className="text-sm text-muted-foreground mt-1 break-keep">
-            {label} · 소유주별 × 사이즈별 보유수량 및 이번달 렌탈비율
-          </p>
-        </div>
-        {totals && (
-          <div className="flex sm:block items-baseline gap-2 sm:text-right shrink-0">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">전체 렌탈비율</div>
-            <div className="font-display text-2xl font-semibold tabular-nums">
-              {totals.rentalRate.toFixed(1)}<span className="text-base text-muted-foreground">%</span>
-            </div>
+      <section className="relative overflow-hidden rounded-3xl border border-white/5 bg-[oklch(0.18_0.02_265)] text-white shadow-[0_30px_80px_-30px_oklch(0.45_0.18_265/0.45)]">
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-[0.18]"
+          style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "22px 22px" }}
+        />
+        <div
+          aria-hidden
+          className="absolute -top-32 -right-24 w-[420px] h-[420px] rounded-full blur-3xl opacity-40"
+          style={{ background: "radial-gradient(circle, oklch(0.65 0.22 280) 0%, transparent 60%)" }}
+        />
+        <div
+          aria-hidden
+          className="absolute -bottom-32 -left-24 w-[360px] h-[360px] rounded-full blur-3xl opacity-30"
+          style={{ background: "radial-gradient(circle, oklch(0.70 0.18 220) 0%, transparent 60%)" }}
+        />
+
+        <div className="relative p-6 md:p-10 space-y-6 md:space-y-8">
+          <div>
+            <div className="text-[11px] font-medium uppercase tracking-[0.15em] text-white/60 mb-2">자산 포트폴리오</div>
+            {isLoading ? (
+              <div className="text-white/50 text-sm">불러오는 중...</div>
+            ) : (
+              <>
+                <h1 className="font-display text-2xl md:text-4xl font-semibold leading-tight">
+                  <span className="tabular-nums">{totalAll.toLocaleString()}</span>
+                  <span className="text-white/70 font-normal text-lg md:text-2xl"> 대 보유</span>
+                  <span className="text-white/30 mx-2">·</span>
+                  <span className="tabular-nums">{totalRental.toLocaleString()}</span>
+                  <span className="text-white/70 font-normal text-lg md:text-2xl"> 대 렌탈</span>
+                </h1>
+                <p className="text-sm text-white/45 mt-2 break-keep">{label} · 소유주별 × 사이즈별 보유수량</p>
+              </>
+            )}
           </div>
-        )}
-      </div>
+          {!isLoading && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-8 md:max-w-2xl">
+              <DarkMetric label="렌탈비율" valueNode={darkRentalRateBadge(rentalRate)} hint="전체 기준" />
+              <DarkMetric label="소유주" value={`${rows.length}`} hint={ownerId ? "선택 범위" : "전체"} />
+              <DarkMetric label="사이즈 종류" value={`${sizes.length}`} hint="보유 SKU" />
+              <DarkMetric label="미렌탈" value={idleCount.toLocaleString()} hint={`주력 ${topSize}`} />
+            </div>
+          )}
+        </div>
+      </section>
 
       <Card>
         <CardHeader className="pb-3">
