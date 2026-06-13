@@ -182,7 +182,17 @@ export const registerAdminAccount = createServerFn({ method: "POST" })
     if (listErr) throw new Error(listErr.message);
 
     const found = list?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
-    if (found) throw new Error("이미 가입된 이메일입니다. Sign In 탭에서 로그인하세요.");
+    if (found) {
+      if (!found.email_confirmed_at) {
+        const { error: uErr } = await supabaseAdmin.auth.admin.updateUserById(found.id, {
+          email_confirm: true,
+          password: data.password,
+        });
+        if (uErr) throw new Error(uErr.message);
+        return { ok: true };
+      }
+      throw new Error("이미 가입된 이메일입니다. Sign In 탭에서 로그인하세요.");
+    }
 
     const { error } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -191,6 +201,25 @@ export const registerAdminAccount = createServerFn({ method: "POST" })
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+/** Confirm admin email so Sign In works even when Supabase "Confirm email" is enabled. */
+export const confirmAdminEmail = createServerFn({ method: "POST" })
+  .inputValidator((d) => z.object({ email: z.string().email().max(200) }).parse(d))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const email = data.email.trim().toLowerCase();
+
+    const { data: list, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    if (listErr) throw new Error(listErr.message);
+
+    const found = list?.users?.find((u: { email?: string | null }) => u.email?.toLowerCase() === email);
+    if (!found) throw new Error("가입되지 않은 이메일입니다. Sign Up 탭에서 먼저 가입하세요.");
+    if (found.email_confirmed_at) return { confirmed: true, already_confirmed: true };
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(found.id, { email_confirm: true });
+    if (error) throw new Error(error.message);
+    return { confirmed: true, already_confirmed: false };
   });
 
 export const promoteSelfToAdmin = createServerFn({ method: "POST" })

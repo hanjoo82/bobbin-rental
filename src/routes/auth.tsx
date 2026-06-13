@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { ownerInitPasswordIfNeeded, registerAdminAccount } from "@/lib/admin.functions";
+import { ownerInitPasswordIfNeeded, registerAdminAccount, confirmAdminEmail } from "@/lib/admin.functions";
 import { formatAuthError } from "@/lib/auth-errors";
 import { Sparkles, Activity, TrendingUp, Package } from "lucide-react";
 
@@ -39,6 +39,7 @@ function AuthPage() {
 
   const initPw = useServerFn(ownerInitPasswordIfNeeded);
   const registerAdmin = useServerFn(registerAdminAccount);
+  const confirmEmail = useServerFn(confirmAdminEmail);
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPw, setOwnerPw] = useState("");
   const [rememberOwner, setRememberOwner] = useState(false);
@@ -86,6 +87,11 @@ function AuthPage() {
     }
   }
 
+  function needsEmailConfirm(message?: string) {
+    const m = (message ?? "").toLowerCase();
+    return m.includes("email not confirmed") || m.includes("email_not_confirmed");
+  }
+
   async function adminSignIn(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -98,7 +104,13 @@ function AuthPage() {
     }
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+      let { data, error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+
+      if ((error && needsEmailConfirm(error.message)) || (!error && !data.session)) {
+        await confirmEmail({ data: { email: em } });
+        ({ data, error } = await supabase.auth.signInWithPassword({ email: em, password: pw }));
+      }
+
       if (error) {
         const msg = formatAuthError(error.message);
         setFormError(msg);
@@ -106,7 +118,7 @@ function AuthPage() {
         return;
       }
       if (!data.session) {
-        const msg = "로그인 세션을 만들 수 없습니다. 이메일 인증을 완료했는지 확인하세요.";
+        const msg = "로그인 세션을 만들 수 없습니다. 비밀번호를 확인하거나 Sign Up에서 다시 가입하세요.";
         setFormError(msg);
         toast.error(msg);
         return;
