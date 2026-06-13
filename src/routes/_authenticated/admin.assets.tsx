@@ -32,14 +32,13 @@ function RentalRateBadge({ rate }: { rate: number }) {
   );
 }
 
-function DarkMetric({ label, value, valueNode, hint }: { label: string; value?: string; valueNode?: React.ReactNode; hint?: string }) {
+function DarkMetric({ label, value, valueNode }: { label: string; value?: string; valueNode?: React.ReactNode }) {
   return (
     <div className="min-w-0">
       <div className="text-[10px] md:text-[11px] uppercase tracking-wider text-white/50 mb-1">{label}</div>
       <div className="text-xl md:text-2xl font-display font-semibold tabular-nums leading-tight text-white">
         {valueNode ?? value}
       </div>
-      {hint && <div className="text-[11px] text-white/40 mt-0.5">{hint}</div>}
     </div>
   );
 }
@@ -57,7 +56,7 @@ function darkRentalRateBadge(rate: number) {
 }
 
 function AssetsPage() {
-  const { ownerId, label } = useOwnerScope();
+  const { ownerId } = useOwnerScope();
   const fetchMatrix = useServerFn(assetMatrix);
   const { data, isLoading } = useQuery({
     queryKey: ["admin-asset-matrix", ownerId ?? "all"],
@@ -72,10 +71,6 @@ function AssetsPage() {
   const totalRental = totals?.rentalCount ?? 0;
   const rentalRate = totals?.rentalRate ?? 0;
   const idleCount = totalAll - totalRental;
-  const topSize =
-    totals && sizes.length > 0
-      ? sizes.reduce((best, s) => ((totals.bySize[s] ?? 0) > (totals.bySize[best] ?? 0) ? s : best), sizes[0])
-      : "—";
 
   return (
     <div className="space-y-6">
@@ -110,16 +105,15 @@ function AssetsPage() {
                   <span className="tabular-nums">{totalRental.toLocaleString()}</span>
                   <span className="text-white/70 font-normal text-lg md:text-2xl"> 대 렌탈</span>
                 </h1>
-                <p className="text-sm text-white/45 mt-2 break-keep">{label} · 소유주별 × 사이즈별 보유수량</p>
               </>
             )}
           </div>
           {!isLoading && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-8 md:max-w-2xl">
-              <DarkMetric label="렌탈비율" valueNode={darkRentalRateBadge(rentalRate)} hint="전체 기준" />
-              <DarkMetric label="소유주" value={`${rows.length}`} hint={ownerId ? "선택 범위" : "전체"} />
-              <DarkMetric label="사이즈 종류" value={`${sizes.length}`} hint="보유 SKU" />
-              <DarkMetric label="미렌탈" value={idleCount.toLocaleString()} hint={`주력 ${topSize}`} />
+              <DarkMetric label="렌탈비율" valueNode={darkRentalRateBadge(rentalRate)} />
+              <DarkMetric label="소유주" value={`${rows.length}`} />
+              <DarkMetric label="사이즈 종류" value={`${sizes.length}`} />
+              <DarkMetric label="미렌탈" value={idleCount.toLocaleString()} />
             </div>
           )}
         </div>

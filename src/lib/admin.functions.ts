@@ -177,6 +177,14 @@ export const ownerInitPasswordIfNeeded = createServerFn({ method: "POST" })
     return { already_set: false };
   });
 
+/** Assign admin role in user_roles (idempotent). */
+async function grantAdminRole(supabaseAdmin: Awaited<ReturnType<typeof import("@/integrations/supabase/client.server")>>["supabaseAdmin"], userId: string) {
+  const { error } = await supabaseAdmin
+    .from("user_roles")
+    .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
+  if (error) throw new Error(error.message);
+}
+
 /** Public admin registration — creates a confirmed auth user (no email confirmation step). */
 export const registerAdminAccount = createServerFn({ method: "POST" })
   .inputValidator((d) =>
@@ -197,17 +205,19 @@ export const registerAdminAccount = createServerFn({ method: "POST" })
           password: data.password,
         });
         if (uErr) throw new Error(uErr.message);
+        await grantAdminRole(supabaseAdmin, found.id);
         return { ok: true };
       }
       throw new Error("이미 가입된 이메일입니다. Sign In 탭에서 로그인하세요.");
     }
 
-    const { error } = await supabaseAdmin.auth.admin.createUser({
+    const { data: created, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: data.password,
       email_confirm: true,
     });
-    if (error) throw new Error(error.message);
+    if (error || !created.user) throw new Error(error?.message ?? "계정 생성 실패");
+    await grantAdminRole(supabaseAdmin, created.user.id);
     return { ok: true };
   });
 
