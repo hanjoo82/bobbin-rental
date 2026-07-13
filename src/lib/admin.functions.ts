@@ -31,6 +31,20 @@ export const listOwners = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
+/** 소유주별 현재 보유 자산(제품) 수 */
+export const countOwnerProducts = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) => z.object({ owner_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+    const { count, error } = await context.supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", data.owner_id);
+    if (error) throw new Error(error.message);
+    return { count: count ?? 0 };
+  });
+
 export const createOwner = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>

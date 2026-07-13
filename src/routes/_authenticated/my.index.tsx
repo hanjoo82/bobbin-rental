@@ -59,7 +59,7 @@ export function MyDashboard() {
   const { ownerId, label, isAdmin } = useOwnerScope();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => fetchMe() });
   const { data, isLoading } = useQuery({
-    queryKey: ["asset-ops", ownerId ?? "all"],
+    queryKey: ["asset-ops-v2", ownerId ?? "all"],
     queryFn: () => fetchOps({ data: ownerId ? { owner_id: ownerId } : {} }),
   });
   const [drill, setDrill] = useState<DrillKey>(null);

@@ -145,6 +145,32 @@ export const renterProfiles = createServerFn({ method: "GET" })
 
     const now = Date.now();
     const dayMs = 86_400_000;
+
+    // 월말 스냅샷 기준 UTC YYYY-MM (업로드 changed_at = 해당 월 말일 UTC)
+    const utcYm = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    };
+    const rentersByMonth = new Map<string, Set<string>>();
+    for (const h of history ?? []) {
+      if (h.status_category !== "rental") continue;
+      const name = ((h.renter_name as string) ?? "").trim();
+      if (!name) continue;
+      const ym = utcYm(h.changed_at as string);
+      if (!rentersByMonth.has(ym)) rentersByMonth.set(ym, new Set());
+      rentersByMonth.get(ym)!.add(name);
+    }
+    const monthKeys = Array.from(rentersByMonth.keys()).sort();
+    const curYm = monthKeys.at(-1);
+    const prevYm = monthKeys.length >= 2 ? monthKeys.at(-2)! : null;
+    const curRenters = curYm ? rentersByMonth.get(curYm)! : new Set<string>();
+    const prevRenters = prevYm ? rentersByMonth.get(prevYm)! : new Set<string>();
+    // 전월 스냅샷에 없고 최신 월에 처음 등장한 거래처
+    const newRenterNames = new Set<string>();
+    for (const name of curRenters) {
+      if (!prevRenters.has(name)) newRenterNames.add(name);
+    }
+
     const map = new Map<string, {
       name: string;
       count: number;
@@ -180,6 +206,7 @@ export const renterProfiles = createServerFn({ method: "GET" })
         firstSeen: first?.toISOString() ?? null,
         lastSeen: last?.toISOString() ?? null,
         tenureDays,
+        isNew: newRenterNames.has(e.name),
       };
     }).sort((a, b) => b.count - a.count);
 
@@ -192,8 +219,8 @@ export const renterProfiles = createServerFn({ method: "GET" })
       ? profiles.slice(0, 3).reduce((s, p) => s + p.count, 0) / totalRentals
       : 0;
 
-    // 신규 vs 장기 (tenureDays 기준 90일)
-    const newCustomers = profiles.filter((p) => p.tenureDays < 90).length;
+    // 신규 = 전월 스냅샷에 없고 최신 월에 등장 / 장기 = 그 외 현재 렌탈 거래처
+    const newCustomers = profiles.filter((p) => p.isNew).length;
     const longCustomers = profiles.length - newCustomers;
 
     return {
@@ -205,6 +232,7 @@ export const renterProfiles = createServerFn({ method: "GET" })
       top3Share,
       newCustomers,
       longCustomers,
+      compareMonths: { previous: prevYm, current: curYm },
     };
   });
 
@@ -249,6 +277,8 @@ export const trendsExtended = createServerFn({ method: "GET" })
 
     // 기준 시점 = 데이터의 최신 시점 (history 또는 products updated_at 중 가장 최근)
     // 시작 시점 = 데이터의 최초 시점 (history.changed_at 중 가장 이른 것)
+    // 주의: 업로드 스냅샷 changed_at 은 월말 23:59:59Z 이므로 반드시 UTC 달 경계를 쓴다.
+    // (KST면 6/30 23:59Z → 7월로 잘못 버킷팅되어 6월이 사라지고 이후 달이 수평선이 됨)
     let refTs = 0;
     let firstTs = Number.POSITIVE_INFINITY;
     for (const h of history ?? []) {
@@ -265,24 +295,27 @@ export const trendsExtended = createServerFn({ method: "GET" })
     const refDate = new Date(refTs);
     const firstDate = new Date(firstTs);
 
-    // 데이터가 시작된 달부터 기준 월까지 표시 (최대 months 개월)
-    const startMonth = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1, 0, 0, 0, 0);
-    const endMonth = new Date(refDate.getFullYear(), refDate.getMonth(), 1, 0, 0, 0, 0);
-    const totalSpan =
-      (endMonth.getFullYear() - startMonth.getFullYear()) * 12 +
-      (endMonth.getMonth() - startMonth.getMonth()) + 1;
-    // 데이터 시작 월부터 항상 `months` 개월 분량을 표시 (미래 월은 비워둠) → 단일 데이터도 좌측 정렬됨
-    const span = Math.max(months, totalSpan);
-    const since = new Date(startMonth.getFullYear(), startMonth.getMonth(), 1, 0, 0, 0, 0);
+    const utcMonthKey = (ts: number) => {
+      const d = new Date(ts);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    };
 
-    // 월 키 목록
+    // 데이터 구간: 최신 UTC 월 포함, 최대 `months`개월. 미래 빈 달은 만들지 않음.
+    const endMonthUtc = Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth(), 1);
+    const dataStartUtc = Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1);
+    let startMonthUtc = Date.UTC(refDate.getUTCFullYear(), refDate.getUTCMonth() - (months - 1), 1);
+    if (startMonthUtc < dataStartUtc) startMonthUtc = dataStartUtc;
+
     const monthKeys: { key: string; endTs: number }[] = [];
-    for (let i = 0; i < span; i++) {
-      const d = new Date(since.getFullYear(), since.getMonth() + i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const end = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-      end.setMilliseconds(-1);
-      monthKeys.push({ key, endTs: end.getTime() });
+    for (
+      let cur = startMonthUtc;
+      cur <= endMonthUtc;
+      cur = Date.UTC(new Date(cur).getUTCFullYear(), new Date(cur).getUTCMonth() + 1, 1)
+    ) {
+      const d = new Date(cur);
+      const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      const endTs = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) - 1;
+      monthKeys.push({ key, endTs });
     }
 
     type Bucket = {
@@ -328,12 +361,10 @@ export const trendsExtended = createServerFn({ method: "GET" })
     }
 
     // window 내 이벤트로 신규 렌탈/회수/사이즈/회수일수/신규거래처 집계
-    const sinceTs = since.getTime();
     for (const h of history ?? []) {
       const ts = new Date(h.changed_at as string).getTime();
-      if (ts < sinceTs) continue;
-      const d = new Date(ts);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (ts < startMonthUtc) continue;
+      const key = utcMonthKey(ts);
       const b = buckets.get(key);
       if (!b) continue;
 

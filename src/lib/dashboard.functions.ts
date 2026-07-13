@@ -153,9 +153,6 @@ export const assetOps = createServerFn({ method: "GET" })
     const nowMs = now.getTime();
     const dayMs = 86_400_000;
 
-    // 월 경계 (이번 달 1일 / 전월 1일)
-    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
     const last30Start = nowMs - 30 * dayMs;
     const yearStart = nowMs - 365 * dayMs;
 
@@ -194,30 +191,78 @@ export const assetOps = createServerFn({ method: "GET" })
     const rentalRate = total > 0 ? rentalTotal / total : 0;
     const stockRate = total > 0 ? (stockTotal + inTransitTotal) / total : 0;
 
-    // 월별 신규렌탈 / 회수 + 연간 누적 신규렌탈
-    let mNewRentals = 0, mReturns = 0, prevMNewRentals = 0, prevMReturns = 0, yearNewRentals = 0;
-    let priorMonthEvents = 0; // 이번달 이전 history 이벤트 수 (전월 비교 가능 여부 판단)
+    // 월말 스냅샷 이력(UTC YYYY-MM). changed_at은 업로드 시 해당 월 말일 23:59:59Z.
+    // 로컬 TZ(UTC+9)로 달 경계를 치면 6월 말 스냅샷이 7월로 잘못 잡혀 전월 비교가 깨진다.
+    const utcYm = (iso: string) => {
+      const d = new Date(iso);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    };
+    type Snap = { status: string; renter: string | null; at: number };
+    const monthSnaps = new Map<string, Map<string, Snap>>();
     const firstSeenRenter = new Map<string, number>();
     const lastRentalStart = new Map<string, Date>();
+
     for (const h of history ?? []) {
       const t = new Date(h.changed_at as string).getTime();
-      if (t < thisMonthStart) priorMonthEvents++;
+      const ym = utcYm(h.changed_at as string);
+      const pid = h.product_id as string;
+      if (!monthSnaps.has(ym)) monthSnaps.set(ym, new Map());
+      const snap = monthSnaps.get(ym)!;
+      const prev = snap.get(pid);
+      if (!prev || t >= prev.at) {
+        snap.set(pid, {
+          status: h.status_category as string,
+          renter: (h.renter_name as string) ?? null,
+          at: t,
+        });
+      }
       if (h.status_category === "rental") {
-        const pid = h.product_id as string;
         const dt = new Date(h.changed_at as string);
-        const prev = lastRentalStart.get(pid);
-        if (!prev || dt > prev) lastRentalStart.set(pid, dt);
+        const prevStart = lastRentalStart.get(pid);
+        if (!prevStart || dt > prevStart) lastRentalStart.set(pid, dt);
         const n = ((h.renter_name as string) ?? "").trim();
         if (n && !firstSeenRenter.has(n)) firstSeenRenter.set(n, t);
-        if (t >= thisMonthStart) mNewRentals++;
-        else if (t >= prevMonthStart) prevMNewRentals++;
-        if (t >= yearStart) yearNewRentals++;
-      } else if (h.status_category === "in_stock") {
-        if (t >= thisMonthStart) mReturns++;
-        else if (t >= prevMonthStart) prevMReturns++;
       }
     }
-    const hasPriorMonth = priorMonthEvents > 0;
+
+    const monthKeys = Array.from(monthSnaps.keys()).sort();
+    const hasPriorMonth = monthKeys.length >= 2;
+    const curYm = monthKeys.at(-1);
+    const prevYm = hasPriorMonth ? monthKeys.at(-2)! : null;
+    const curSnap = curYm ? monthSnaps.get(curYm)! : new Map<string, Snap>();
+    const prevSnap = prevYm ? monthSnaps.get(prevYm)! : new Map<string, Snap>();
+
+    const countTransitions = (from: Map<string, Snap>, to: Map<string, Snap>) => {
+      let newRentals = 0;
+      let returns = 0;
+      for (const [pid, cur] of to) {
+        const earlier = from.get(pid);
+        if (cur.status === "rental" && (!earlier || earlier.status !== "rental")) newRentals++;
+        if (earlier?.status === "rental" && cur.status !== "rental") returns++;
+      }
+      return { newRentals, returns };
+    };
+
+    const { newRentals: mNewRentals, returns: mReturns } = hasPriorMonth
+      ? countTransitions(prevSnap, curSnap)
+      : { newRentals: 0, returns: 0 };
+
+    let prevMNewRentals = 0;
+    let prevMReturns = 0;
+    if (monthKeys.length >= 3) {
+      const older = monthSnaps.get(monthKeys[monthKeys.length - 3])!;
+      const tr = countTransitions(older, prevSnap);
+      prevMNewRentals = tr.newRentals;
+      prevMReturns = tr.returns;
+    }
+
+    let yearNewRentals = 0;
+    for (let i = 1; i < monthKeys.length; i++) {
+      const [y, m] = monthKeys[i].split("-").map(Number);
+      if (Date.UTC(y, m - 1, 1) < yearStart) continue;
+      const tr = countTransitions(monthSnaps.get(monthKeys[i - 1])!, monthSnaps.get(monthKeys[i])!);
+      yearNewRentals += tr.newRentals;
+    }
 
     // 신규 거래처 (최근 30일)
     const newRenters: { name: string; firstAt: string }[] = [];
@@ -256,10 +301,13 @@ export const assetOps = createServerFn({ method: "GET" })
       ? Math.round(prevDays.reduce((a, b) => a + b, 0) / prevDays.length) : 0;
     const avgDaysDelta = avgRentalDays - prevAvgRentalDays;
 
-    // 전월 렌탈비율 추정 = 현재 렌탈 - 이번달 신규 + 이번달 회수
-    // (이번달 이전 history가 없는 첫 스냅샷 운영에서는 의미가 없으므로 0으로 둔다)
-    const prevRentalCount = hasPriorMonth ? Math.max(0, rentalTotal - mNewRentals + mReturns) : rentalTotal;
-    const prevRentalRate = total > 0 ? prevRentalCount / total : 0;
+    // 전월 스냅샷 렌탈비율 vs 현재 보유 렌탈비율
+    let prevRentalCount = 0;
+    for (const s of prevSnap.values()) if (s.status === "rental") prevRentalCount++;
+    const prevSnapTotal = prevSnap.size;
+    const prevRentalRate = hasPriorMonth && prevSnapTotal > 0
+      ? prevRentalCount / prevSnapTotal
+      : rentalRate;
     const rentalRateDeltaPp = hasPriorMonth ? (rentalRate - prevRentalRate) * 100 : 0;
 
     const topRenters = Array.from(renterCounts.entries())
@@ -284,7 +332,6 @@ export const assetOps = createServerFn({ method: "GET" })
       insight = `최근 30일간 신규 거래처 ${newRenters.length}개사가 첫 거래를 시작했습니다.`;
     }
 
-    // 전월 비교 데이터가 없으면 "이번달 신규/회수"도 의미가 없으므로 0 처리
     const monthOut = hasPriorMonth ? {
       newRentals: mNewRentals,
       prevNewRentals: prevMNewRentals,

@@ -55,7 +55,15 @@ export const uploadBatch = createServerFn({ method: "POST" })
       }
     }
 
-    const productsPayload = data.rows.map((r) => ({
+    // 같은 배치 내 product_no 중복 시 Postgres upsert가
+    // "ON CONFLICT DO UPDATE cannot affect row a second time" 로 실패하므로 마지막 행만 유지.
+    const byProductNo = new Map<string, (typeof data.rows)[number]>();
+    for (const r of data.rows) {
+      byProductNo.set(r.product_no, r);
+    }
+    const uniqueRows = Array.from(byProductNo.values());
+
+    const productsPayload = uniqueRows.map((r) => ({
       owner_id: data.owner_id,
       product_no: r.product_no,
       bobbin_size: r.bobbin_size ?? null,
@@ -78,8 +86,8 @@ export const uploadBatch = createServerFn({ method: "POST" })
         uploaded_by: context.userId,
         file_name: data.file_name,
         period_month: data.period_month,
-        row_count: data.rows.length,
-        inserted_count: data.rows.length,
+        row_count: uniqueRows.length,
+        inserted_count: uniqueRows.length,
         updated_count: 0,
         error_count: 0,
       })
@@ -87,7 +95,7 @@ export const uploadBatch = createServerFn({ method: "POST" })
       .single();
     if (bErr) console.error(bErr);
 
-    const productNos = data.rows.map((r) => r.product_no);
+    const productNos = uniqueRows.map((r) => r.product_no);
     const { data: newProducts } = await supabaseAdmin
       .from("products")
       .select("id, product_no, status_category, renter_name, stock_location")
@@ -128,5 +136,9 @@ export const uploadBatch = createServerFn({ method: "POST" })
       if (hErr) console.error("history insert err", hErr);
     }
 
-    return { row_count: data.rows.length, history_recorded: historyPayload.length };
+    return {
+      row_count: uniqueRows.length,
+      history_recorded: historyPayload.length,
+      deduped: data.rows.length - uniqueRows.length,
+    };
   });

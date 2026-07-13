@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { listOwners } from "@/lib/admin.functions";
+import { listOwners, countOwnerProducts } from "@/lib/admin.functions";
 import { uploadBatch } from "@/lib/upload.functions";
 import { parseStatus } from "@/lib/status";
 import { toast } from "sonner";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/settings/upload")({
   component: UploadPage,
@@ -30,6 +31,7 @@ interface PreviewRow {
 
 function UploadPage() {
   const fetchOwners = useServerFn(listOwners);
+  const fetchAssetCount = useServerFn(countOwnerProducts);
   const upload = useServerFn(uploadBatch);
   const { data: owners } = useQuery({ queryKey: ["owners"], queryFn: () => fetchOwners() });
 
@@ -42,6 +44,16 @@ function UploadPage() {
   });
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const { data: assetCountData, isFetching: assetCountLoading } = useQuery({
+    queryKey: ["owner-product-count", ownerId],
+    queryFn: () => fetchAssetCount({ data: { owner_id: ownerId } }),
+    enabled: !!ownerId,
+  });
+  const heldAssets = assetCountData?.count ?? 0;
+  const excelRows = rows.length;
+  const countsReady = !!ownerId && excelRows > 0 && !assetCountLoading;
+  const countsMatch = countsReady && heldAssets === excelRows;
 
   function detectPeriodFromName(name: string): string | null {
     let m = name.match(/(20\d{2})[-_.\s]?(0[1-9]|1[0-2])/);
@@ -63,9 +75,9 @@ function UploadPage() {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf);
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+    const sheetRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
-    const parsed: PreviewRow[] = (rows
+    const parsed: PreviewRow[] = (sheetRows
       .slice(1)
       .map((row) => {
         const pn = String(row[0] ?? "").trim();
@@ -91,6 +103,8 @@ function UploadPage() {
       const match = owners.find((o: any) => base.includes(o.name) || o.name.includes(base));
       if (match) setOwnerId(match.id);
     }
+
+    toast.message(`엑셀 ${parsed.length}행 로드됨`);
   }
 
   async function submit() {
@@ -147,6 +161,14 @@ function UploadPage() {
               <SelectContent>{(owners ?? []).map((o: any) => <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>)}</SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">반드시 직접 선택해 주세요. 파일명에 소유주명이 포함되어 있으면 제안만 적용됩니다.</p>
+            {ownerId && (
+              <p className="text-sm text-muted-foreground">
+                현재 보유자산:{" "}
+                <strong className="text-foreground tabular-nums">
+                  {assetCountLoading ? "…" : `${heldAssets.toLocaleString()}건`}
+                </strong>
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>기준월 <span className="text-destructive">*</span></Label>
@@ -170,6 +192,37 @@ function UploadPage() {
 
       {rows.length > 0 && (
         <>
+          {countsReady && (
+            <div
+              className={`rounded-2xl border px-4 py-3 flex items-start gap-3 ${
+                countsMatch
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                  : "border-amber-200 bg-amber-50 text-amber-950"
+              }`}
+              role="status"
+            >
+              {countsMatch ? (
+                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="font-semibold text-sm">
+                  {countsMatch ? "일치합니다." : "일치하지 않습니다."}
+                </p>
+                <p className="text-sm tabular-nums">
+                  보유자산 <strong>{heldAssets.toLocaleString()}</strong>건
+                  <span className="mx-1.5 opacity-50">·</span>
+                  엑셀 업로드 <strong>{excelRows.toLocaleString()}</strong>행
+                  {!countsMatch && (
+                    <span className="ml-1.5">
+                      (차이 {Math.abs(heldAssets - excelRows).toLocaleString()}건)
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
 
           <Card>
             <CardHeader><CardTitle>3. 미리보기 ({rows.length}건)</CardTitle></CardHeader>

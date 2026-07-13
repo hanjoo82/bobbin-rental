@@ -34,7 +34,7 @@ function RentersPanel() {
   const fetch = useServerFn(renterProfiles);
   const { ownerId } = useOwnerScope();
   const { data, isLoading } = useQuery({
-    queryKey: ["my-renter-profiles", ownerId ?? "all"],
+    queryKey: ["my-renter-profiles-v2", ownerId ?? "all"],
     queryFn: () => fetch({ data: ownerId ? { owner_id: ownerId } : {} }),
   });
 
@@ -44,6 +44,12 @@ function RentersPanel() {
   const top3 = (data?.top3Share ?? 0) * 100;
   const hhi = (data?.hhi ?? 0) * 10000;
   const concentration = hhi > 2500 ? "높음" : hhi > 1500 ? "중간" : "낮음";
+  const prevLabel = data?.compareMonths?.previous
+    ? `${Number(data.compareMonths.previous.slice(5))}월`
+    : "전월";
+  const curLabel = data?.compareMonths?.current
+    ? `${Number(data.compareMonths.current.slice(5))}월`
+    : "이번달";
 
   return (
     <div className="space-y-6">
@@ -79,7 +85,7 @@ function RentersPanel() {
               }
               hint="상위 쏠림"
             />
-            <DarkMetric label="신규 거래처" value={`${data?.newCustomers ?? 0}`} hint="90일 이내" />
+            <DarkMetric label="신규 거래처" value={`${data?.newCustomers ?? 0}`} hint={`${prevLabel}→${curLabel}`} />
             <DarkMetric
               label="미지정 렌탈"
               value={`${(data?.unnamedRentals ?? 0).toLocaleString()}`}
@@ -96,8 +102,8 @@ function RentersPanel() {
         <CardContent>
           <SegmentBar
             segments={[
-              { label: "장기 (90일+)", value: data?.longCustomers ?? 0, color: "oklch(0.55 0.18 265)" },
-              { label: "신규 (90일 이내)", value: data?.newCustomers ?? 0, color: "oklch(0.72 0.18 200)" },
+              { label: "기존 거래처", value: data?.longCustomers ?? 0, color: "oklch(0.55 0.18 265)" },
+              { label: `신규 (${prevLabel}→${curLabel})`, value: data?.newCustomers ?? 0, color: "oklch(0.72 0.18 200)" },
             ]}
           />
         </CardContent>
@@ -127,6 +133,7 @@ function RentersPanel() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           {isTop && <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">#{i + 1}</span>}
+                          {p.isNew && <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">신규</span>}
                           <h3 className="font-semibold truncate">{p.name}</h3>
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
