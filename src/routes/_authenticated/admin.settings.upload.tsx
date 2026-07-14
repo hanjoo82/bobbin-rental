@@ -12,7 +12,7 @@ import { listOwners, countOwnerProducts } from "@/lib/admin.functions";
 import { uploadBatch } from "@/lib/upload.functions";
 import { parseStatus } from "@/lib/status";
 import { toast } from "sonner";
-import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin/settings/upload")({
   component: UploadPage,
@@ -45,15 +45,19 @@ function UploadPage() {
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const { data: assetCountData, isFetching: assetCountLoading } = useQuery({
-    queryKey: ["owner-product-count", ownerId],
-    queryFn: () => fetchAssetCount({ data: { owner_id: ownerId } }),
+  const { data: assetCountData, isFetching: assetCountLoading, refetch: refetchAssetCount } = useQuery({
+    queryKey: ["owner-product-count", ownerId, periodMonth],
+    queryFn: () => fetchAssetCount({ data: { owner_id: ownerId, period_month: periodMonth } }),
     enabled: !!ownerId,
   });
   const heldAssets = assetCountData?.count ?? 0;
+  const prevMonthCount = assetCountData?.previous_count ?? 0;
+  const prevMonthKey = assetCountData?.previous_month;
+  const prevMonthLabel = prevMonthKey ? `${Number(prevMonthKey.slice(5))}월` : "전월";
   const excelRows = rows.length;
-  const countsReady = !!ownerId && excelRows > 0 && !assetCountLoading;
-  const countsMatch = countsReady && heldAssets === excelRows;
+  const uniqueExcel = new Set(rows.map((r) => r.product_no)).size;
+  const compareReady = !!ownerId && excelRows > 0 && !assetCountLoading && prevMonthKey != null;
+  const vsPrevDelta = uniqueExcel - prevMonthCount;
 
   function detectPeriodFromName(name: string): string | null {
     let m = name.match(/(20\d{2})[-_.\s]?(0[1-9]|1[0-2])/);
@@ -115,6 +119,7 @@ function UploadPage() {
     const totalBatches = Math.ceil(total / BATCH);
     let processed = 0;
     const errors: string[] = [];
+    let assetsAfter = heldAssets;
     try {
       for (let i = 0; i < totalBatches; i++) {
         const chunk = rows.slice(i * BATCH, (i + 1) * BATCH);
@@ -129,15 +134,28 @@ function UploadPage() {
             },
           });
           processed += res?.row_count ?? chunk.length;
+          if (typeof res?.product_count === "number") assetsAfter = res.product_count;
           toast.message(`배치 ${i + 1}/${totalBatches} 완료 (${processed}/${total}행)`);
         } catch (e: any) {
           errors.push(`배치 ${i + 1}: ${e.message}`);
         }
       }
+      await refetchAssetCount();
+      const vsPrev = assetsAfter - prevMonthCount;
       if (errors.length) {
         toast.error(`완료 (${processed}/${total}행) — 오류 ${errors.length}건: ${errors[0]}`);
+      } else if (prevMonthKey && vsPrev > 0) {
+        toast.success(
+          `업로드 완료 · ${prevMonthLabel} 대비 +${vsPrev.toLocaleString()}대 (${prevMonthCount.toLocaleString()}→${assetsAfter.toLocaleString()})`,
+        );
+        setRows([]);
+      } else if (prevMonthKey && vsPrev < 0) {
+        toast.success(
+          `업로드 완료 · ${prevMonthLabel} 대비 ${vsPrev.toLocaleString()}대 (${prevMonthCount.toLocaleString()}→${assetsAfter.toLocaleString()})`,
+        );
+        setRows([]);
       } else {
-        toast.success(`업로드 완료 (${processed}건)`);
+        toast.success(`업로드 완료 (${processed}건) · 자산 ${assetsAfter.toLocaleString()}대`);
         setRows([]);
       }
     } finally {
@@ -192,35 +210,49 @@ function UploadPage() {
 
       {rows.length > 0 && (
         <>
-          {countsReady && (
+          {compareReady && (
             <div
               className={`rounded-2xl border px-4 py-3 flex items-start gap-3 ${
-                countsMatch
+                vsPrevDelta > 0
                   ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                  : "border-amber-200 bg-amber-50 text-amber-950"
+                  : vsPrevDelta < 0
+                    ? "border-amber-200 bg-amber-50 text-amber-950"
+                    : "border-slate-200 bg-slate-50 text-slate-800"
               }`}
               role="status"
             >
-              {countsMatch ? (
-                <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
+              {vsPrevDelta > 0 ? (
+                <TrendingUp className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" />
+              ) : vsPrevDelta < 0 ? (
+                <TrendingDown className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
               ) : (
-                <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                <Minus className="w-5 h-5 shrink-0 text-slate-500 mt-0.5" />
               )}
               <div className="min-w-0 space-y-0.5">
                 <p className="font-semibold text-sm">
-                  {countsMatch ? "일치합니다." : "일치하지 않습니다."}
+                  {vsPrevDelta > 0
+                    ? `전월(${prevMonthLabel}) 대비 ${vsPrevDelta.toLocaleString()}대 추가`
+                    : vsPrevDelta < 0
+                      ? `전월(${prevMonthLabel}) 대비 ${Math.abs(vsPrevDelta).toLocaleString()}대 감소`
+                      : `전월(${prevMonthLabel})과 자산 수가 동일합니다`}
                 </p>
                 <p className="text-sm tabular-nums">
-                  보유자산 <strong>{heldAssets.toLocaleString()}</strong>건
-                  <span className="mx-1.5 opacity-50">·</span>
-                  엑셀 업로드 <strong>{excelRows.toLocaleString()}</strong>행
-                  {!countsMatch && (
-                    <span className="ml-1.5">
-                      (차이 {Math.abs(heldAssets - excelRows).toLocaleString()}건)
+                  {prevMonthLabel} <strong>{prevMonthCount.toLocaleString()}</strong>대
+                  <span className="mx-1.5 opacity-50">→</span>
+                  엑셀 <strong>{uniqueExcel.toLocaleString()}</strong>행
+                  {excelRows !== uniqueExcel && (
+                    <span className="text-muted-foreground ml-1.5">
+                      (원본 {excelRows.toLocaleString()}행 · 중복 제거 후)
                     </span>
                   )}
                 </p>
               </div>
+            </div>
+          )}
+          {!!ownerId && excelRows > 0 && !assetCountLoading && !prevMonthKey && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700" role="status">
+              전월 스냅샷이 없습니다. 엑셀 <strong className="tabular-nums">{uniqueExcel.toLocaleString()}</strong>행이
+              최초 기준으로 업로드됩니다.
             </div>
           )}
 

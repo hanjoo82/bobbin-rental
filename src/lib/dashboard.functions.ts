@@ -310,6 +310,22 @@ export const assetOps = createServerFn({ method: "GET" })
       : rentalRate;
     const rentalRateDeltaPp = hasPriorMonth ? (rentalRate - prevRentalRate) * 100 : 0;
 
+    // 자산수 전월 대비: 현재 products 수 vs 전월 스냅샷 수
+    // (당월 엑셀 업로드로 신규 product_no가 upsert되면 total이 즉시 반영됨)
+    const assetsCurrent = total;
+    const assetsPrevious = hasPriorMonth ? prevSnapTotal : total;
+    const assetsDelta = hasPriorMonth ? assetsCurrent - assetsPrevious : 0;
+    let assetsAdded = 0;
+    let assetsRemoved = 0;
+    if (hasPriorMonth) {
+      const prevIds = new Set(prevSnap.keys());
+      const curIds = new Set(
+        (products ?? []).map((p) => p.id as string).concat([...curSnap.keys()]),
+      );
+      for (const id of curIds) if (!prevIds.has(id)) assetsAdded++;
+      for (const id of prevIds) if (!curIds.has(id)) assetsRemoved++;
+    }
+
     const topRenters = Array.from(renterCounts.entries())
       .map(([name, count]) => ({
         name, count,
@@ -318,10 +334,20 @@ export const assetOps = createServerFn({ method: "GET" })
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    // 인사이트 우선순위: 렌탈비율 MoM → 신규렌탈 MoM → 신규거래처 → fallback
+    const fmtYm = (ym: string | null | undefined) => {
+      if (!ym) return "";
+      const [, m] = ym.split("-");
+      return `${Number(m)}월`;
+    };
+
+    // 인사이트 우선순위: 자산수 증가 → 렌탈비율 MoM → 신규렌탈 MoM → 신규거래처 → fallback
     let insight = "전월 대비 큰 변화 없이 안정적으로 운영되고 있습니다.";
     if (!hasPriorMonth) {
       insight = "전월 데이터가 아직 없어 비교 지표는 다음 달부터 표시됩니다.";
+    } else if (assetsDelta > 0) {
+      insight = `자산이 전월(${fmtYm(prevYm)} ${assetsPrevious.toLocaleString()}대) 대비 ${assetsDelta.toLocaleString()}대 증가했습니다. (현재 ${assetsCurrent.toLocaleString()}대)`;
+    } else if (assetsDelta < 0) {
+      insight = `자산이 전월(${fmtYm(prevYm)} ${assetsPrevious.toLocaleString()}대) 대비 ${Math.abs(assetsDelta).toLocaleString()}대 감소했습니다. (현재 ${assetsCurrent.toLocaleString()}대)`;
     } else if (Math.abs(rentalRateDeltaPp) >= 2) {
       const dir = rentalRateDeltaPp >= 0 ? "상승" : "하락";
       insight = `렌탈비율이 전월 대비 ${rentalRateDeltaPp >= 0 ? "+" : ""}${rentalRateDeltaPp.toFixed(1)}%p ${dir} (${(prevRentalRate * 100).toFixed(1)}% → ${(rentalRate * 100).toFixed(1)}%)`;
@@ -360,6 +386,15 @@ export const assetOps = createServerFn({ method: "GET" })
       sizes,
       month: monthOut,
       hasPriorMonth,
+      assets: {
+        current: assetsCurrent,
+        previous: assetsPrevious,
+        delta: assetsDelta,
+        added: assetsAdded,
+        removed: assetsRemoved,
+        previousMonth: prevYm,
+        currentMonth: curYm,
+      },
       annualTurnover,
       yearNewRentals,
       topRenters,

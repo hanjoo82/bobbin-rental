@@ -31,10 +31,16 @@ export const listOwners = createServerFn({ method: "GET" })
     return data ?? [];
   });
 
-/** 소유주별 현재 보유 자산(제품) 수 */
+/** 소유주별 현재 보유 자산 수 + (선택) 기준월의 전월 스냅샷 수 */
 export const countOwnerProducts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d) => z.object({ owner_id: z.string().uuid() }).parse(d))
+  .inputValidator((d) =>
+    z.object({
+      owner_id: z.string().uuid(),
+      // YYYY-MM — 이 기준월의 직전 달 스냅샷과 비교
+      period_month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+    }).parse(d),
+  )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { count, error } = await context.supabase
@@ -42,7 +48,32 @@ export const countOwnerProducts = createServerFn({ method: "GET" })
       .select("id", { count: "exact", head: true })
       .eq("owner_id", data.owner_id);
     if (error) throw new Error(error.message);
-    return { count: count ?? 0 };
+
+    let previous_month: string | null = null;
+    let previous_count = 0;
+
+    if (data.period_month) {
+      const [y, m] = data.period_month.split("-").map(Number);
+      const prev = new Date(Date.UTC(y, m - 2, 1));
+      previous_month = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
+      const monthStart = `${previous_month}-01T00:00:00.000Z`;
+      const monthEnd = new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth() + 1, 1) - 1).toISOString();
+
+      const { data: hist, error: hErr } = await context.supabase
+        .from("product_status_history")
+        .select("product_id")
+        .eq("owner_id", data.owner_id)
+        .gte("changed_at", monthStart)
+        .lte("changed_at", monthEnd);
+      if (hErr) throw new Error(hErr.message);
+      previous_count = new Set((hist ?? []).map((h) => h.product_id as string)).size;
+    }
+
+    return {
+      count: count ?? 0,
+      previous_month,
+      previous_count,
+    };
   });
 
 export const createOwner = createServerFn({ method: "POST" })

@@ -136,9 +136,15 @@ export const uploadBatch = createServerFn({ method: "POST" })
       if (hErr) console.error("history insert err", hErr);
     }
 
+    const { count: productCount } = await supabaseAdmin
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", data.owner_id);
+
     return {
       row_count: uniqueRows.length,
       history_recorded: historyPayload.length,
       deduped: data.rows.length - uniqueRows.length,
+      product_count: productCount ?? 0,
     };
   });

@@ -59,7 +59,7 @@ export function MyDashboard() {
   const { ownerId, label, isAdmin } = useOwnerScope();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => fetchMe() });
   const { data, isLoading } = useQuery({
-    queryKey: ["asset-ops-v2", ownerId ?? "all"],
+    queryKey: ["asset-ops-v3", ownerId ?? "all"],
     queryFn: () => fetchOps({ data: ownerId ? { owner_id: ownerId } : {} }),
   });
   const [drill, setDrill] = useState<DrillKey>(null);
@@ -142,6 +142,13 @@ function AssetHero({ ownerName, data, loading, onOpen }: {
   const rentalRate = (data?.rental?.rate ?? 0) * 100;
   const stockRate = (data?.stockRate ?? 0) * 100;
   const total = data?.total ?? 0;
+  const assetsDelta = data?.assets?.delta ?? 0;
+  const assetsPrevious = data?.assets?.previous ?? 0;
+  const prevMonthLabel = data?.assets?.previousMonth
+    ? `${Number(String(data.assets.previousMonth).slice(5))}월`
+    : "전월";
+  const showAssetGrowth = !!data?.hasPriorMonth && assetsDelta > 0;
+  const showAssetDecline = !!data?.hasPriorMonth && assetsDelta < 0;
 
   return (
     <section
@@ -169,12 +176,29 @@ function AssetHero({ ownerName, data, loading, onOpen }: {
               {ownerName || "내 보빈 현황"}
             </h1>
           </div>
-          <div className="text-right shrink-0">
+          <div className="text-right shrink-0 space-y-1">
             <div className="text-[10px] uppercase tracking-[0.15em] text-white/40">총 보유</div>
             <div className="font-display text-3xl md:text-4xl font-semibold tabular-nums">
               {loading ? "—" : <Num value={total} />}
               <span className="text-sm font-normal text-white/50 ml-1">대</span>
             </div>
+            {!loading && showAssetGrowth && (
+              <div className="inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[11px] font-medium text-emerald-200">
+                <TrendingUp className="w-3 h-3" />
+                {prevMonthLabel} 대비 +{assetsDelta.toLocaleString()}대
+              </div>
+            )}
+            {!loading && showAssetDecline && (
+              <div className="inline-flex items-center gap-1 rounded-full bg-rose-400/15 px-2 py-0.5 text-[11px] font-medium text-rose-200">
+                <TrendingDown className="w-3 h-3" />
+                {prevMonthLabel} 대비 {assetsDelta.toLocaleString()}대
+              </div>
+            )}
+            {!loading && data?.hasPriorMonth && assetsDelta === 0 && (
+              <div className="text-[11px] text-white/35 tabular-nums">
+                {prevMonthLabel} {assetsPrevious.toLocaleString()}대와 동일
+              </div>
+            )}
           </div>
         </div>
 
