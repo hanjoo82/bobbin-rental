@@ -206,7 +206,17 @@ function AssetHero({ ownerName, data, loading, onOpen }: {
 
         <div className="flex items-start gap-2 px-3.5 py-2.5 rounded-xl bg-white/[0.06] backdrop-blur border border-white/10">
           <Sparkles className="w-4 h-4 mt-0.5 text-amber-200/90 shrink-0" />
-          <p className="text-sm text-white/85 leading-snug">{data?.insight ?? "분석 중…"}</p>
+          <div className="text-sm text-white/85 leading-snug space-y-0.5">
+            <p>{data?.insight ?? "분석 중…"}</p>
+            {!loading && data?.hasPriorMonth && rentalRateDeltaPp !== 0 && (
+              <p className="text-white/60">
+                렌탈율 {prevRentalRatePct.toFixed(1)}% → {rentalRate.toFixed(1)}%
+                <span className={`ml-1 font-medium ${rentalRateDeltaPp > 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                  ({rentalRateDeltaPp > 0 ? "+" : ""}{rentalRateDeltaPp.toFixed(1)}%p)
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-3">
