@@ -76,6 +76,48 @@ export const countOwnerProducts = createServerFn({ method: "GET" })
     };
   });
 
+/** 엑셀 product_no 목록 중 이미 등록된 자산과 신규 자산을 구분 */
+export const checkExistingProducts = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d) =>
+    z.object({
+      owner_id: z.string().uuid(),
+      product_nos: z.array(z.string().min(1)).min(1).max(10000),
+    }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    await assertAdmin(context);
+
+    const PAGE = 1000;
+    const existingNos = new Set<string>();
+    for (let from = 0; ; from += PAGE) {
+      const { data: rows, error } = await context.supabase
+        .from("products")
+        .select("product_no")
+        .eq("owner_id", data.owner_id)
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      for (const r of rows ?? []) existingNos.add(r.product_no as string);
+      if (!rows || rows.length < PAGE) break;
+    }
+
+    const uploadedSet = new Set(data.product_nos);
+    const matched: string[] = [];
+    const newOnes: string[] = [];
+
+    for (const pno of uploadedSet) {
+      if (existingNos.has(pno)) matched.push(pno);
+      else newOnes.push(pno);
+    }
+
+    return {
+      total_registered: existingNos.size,
+      matched_count: matched.length,
+      new_count: newOnes.length,
+      new_product_nos: newOnes.slice(0, 50),
+    };
+  });
+
 export const createOwner = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
