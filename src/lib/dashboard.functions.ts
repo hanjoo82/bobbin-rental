@@ -264,10 +264,25 @@ export const assetOps = createServerFn({ method: "GET" })
       yearNewRentals += tr.newRentals;
     }
 
-    // 신규 거래처 (최근 30일)
+    // 신규 거래처: 전월 스냅샷에 없고 최신 월에 등장한 거래처 (통계 페이지와 동일 기준)
+    const rentersByMonth = new Map<string, Set<string>>();
+    for (const h of history ?? []) {
+      if ((h.status_category as string) !== "rental") continue;
+      const name = ((h.renter_name as string) ?? "").trim();
+      if (!name) continue;
+      const ym = utcYm(h.changed_at as string);
+      if (!rentersByMonth.has(ym)) rentersByMonth.set(ym, new Set());
+      rentersByMonth.get(ym)!.add(name);
+    }
+    const curRenters = curYm ? rentersByMonth.get(curYm) ?? new Set<string>() : new Set<string>();
+    const prevRenters = prevYm ? rentersByMonth.get(prevYm) ?? new Set<string>() : new Set<string>();
+
     const newRenters: { name: string; firstAt: string }[] = [];
-    for (const [n, t] of firstSeenRenter.entries()) {
-      if (t >= last30Start) newRenters.push({ name: n, firstAt: new Date(t).toISOString() });
+    for (const name of curRenters) {
+      if (!prevRenters.has(name)) {
+        const t = firstSeenRenter.get(name);
+        newRenters.push({ name, firstAt: t ? new Date(t).toISOString() : new Date().toISOString() });
+      }
     }
     newRenters.sort((a, b) => +new Date(b.firstAt) - +new Date(a.firstAt));
 
@@ -355,7 +370,7 @@ export const assetOps = createServerFn({ method: "GET" })
       const diff = mNewRentals - prevMNewRentals;
       insight = `이번 달 신규 렌탈 ${diff >= 0 ? "+" : ""}${diff}건 (전월 ${prevMNewRentals}건 → 이번달 ${mNewRentals}건)`;
     } else if (newRenters.length > 0) {
-      insight = `최근 30일간 신규 거래처 ${newRenters.length}개사가 첫 거래를 시작했습니다.`;
+      insight = `전월 대비 신규 거래처 ${newRenters.length}개사가 새로 등장했습니다.`;
     }
 
     const monthOut = hasPriorMonth ? {

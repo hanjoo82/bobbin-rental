@@ -93,7 +93,7 @@ export function MyDashboard() {
           suffix="개사"
           icon={<UserPlus className="w-4 h-4" />}
           accent="oklch(0.65 0.10 80)"
-          hint="최근 30일"
+          hint="전월 대비"
           onClick={() => setDrill("newRenters")}
         />
         <KpiCard
@@ -528,7 +528,7 @@ function AvgDaysSheet({ open, onClose, data }: { open: boolean; onClose: () => v
 function NewRentersSheet({ open, onClose, data }: { open: boolean; onClose: () => void; data: any }) {
   const list: { name: string; firstAt: string }[] = data?.newRenters ?? [];
   return (
-    <DrillSheet open={open} onClose={onClose} title="신규 거래처" desc="최근 30일 첫 거래 기준">
+    <DrillSheet open={open} onClose={onClose} title="신규 거래처" desc="전월 스냅샷 대비 신규 등장">
       <div className="rounded-lg border bg-card/50 divide-y">
         {list.length === 0 ? (
           <div className="p-6 text-sm text-muted-foreground text-center flex flex-col items-center gap-2">

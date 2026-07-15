@@ -76,29 +76,74 @@ export const countOwnerProducts = createServerFn({ method: "GET" })
     };
   });
 
-/** 엑셀 product_no 목록 중 이미 등록된 자산과 신규 자산을 구분 */
+/** 엑셀 product_no 목록을 전월 스냅샷과 비교하여 기존/신규 자산 구분 */
 export const checkExistingProducts = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d) =>
     z.object({
       owner_id: z.string().uuid(),
       product_nos: z.array(z.string().min(1)).min(1).max(10000),
+      period_month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }).parse(d),
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
 
-    const PAGE = 1000;
-    const existingNos = new Set<string>();
-    for (let from = 0; ; from += PAGE) {
-      const { data: rows, error } = await context.supabase
-        .from("products")
-        .select("product_no")
-        .eq("owner_id", data.owner_id)
-        .range(from, from + PAGE - 1);
-      if (error) throw new Error(error.message);
-      for (const r of rows ?? []) existingNos.add(r.product_no as string);
-      if (!rows || rows.length < PAGE) break;
+    const prevMonthNos = new Set<string>();
+    let previous_month: string | null = null;
+    let has_previous_snapshot = false;
+
+    let prev_rental_count = 0;
+
+    if (data.period_month) {
+      const [y, m] = data.period_month.split("-").map(Number);
+      const prev = new Date(Date.UTC(y, m - 2, 1));
+      previous_month = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2, "0")}`;
+      const monthStart = `${previous_month}-01T00:00:00.000Z`;
+      const monthEnd = new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth() + 1, 1) - 1).toISOString();
+
+      const PAGE = 1000;
+      const prevProductIds = new Set<string>();
+      const prevHistRows: Array<{ product_id: string; status_category: string }> = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data: hist, error } = await context.supabase
+          .from("product_status_history")
+          .select("product_id, status_category")
+          .eq("owner_id", data.owner_id)
+          .gte("changed_at", monthStart)
+          .lte("changed_at", monthEnd)
+          .range(from, from + PAGE - 1);
+        if (error) throw new Error(error.message);
+        for (const h of hist ?? []) {
+          prevProductIds.add(h.product_id as string);
+          prevHistRows.push(h as { product_id: string; status_category: string });
+        }
+        if (!hist || hist.length < PAGE) break;
+      }
+
+      has_previous_snapshot = prevProductIds.size > 0;
+
+      // 전월 렌탈 수 계산 (product_id별 마지막 상태 기준)
+      const statusByProduct = new Map<string, string>();
+      for (const h of prevHistRows) {
+        statusByProduct.set(h.product_id, h.status_category);
+      }
+      for (const [, status] of statusByProduct) {
+        if (status === "rental") prev_rental_count++;
+      }
+
+      if (prevProductIds.size > 0) {
+        const ids = Array.from(prevProductIds);
+        for (let i = 0; i < ids.length; i += PAGE) {
+          const chunk = ids.slice(i, i + PAGE);
+          const { data: prods, error } = await context.supabase
+            .from("products")
+            .select("product_no")
+            .in("id", chunk);
+          if (error) throw new Error(error.message);
+          for (const p of prods ?? []) prevMonthNos.add(p.product_no as string);
+        }
+      }
     }
 
     const uploadedSet = new Set(data.product_nos);
@@ -106,15 +151,18 @@ export const checkExistingProducts = createServerFn({ method: "POST" })
     const newOnes: string[] = [];
 
     for (const pno of uploadedSet) {
-      if (existingNos.has(pno)) matched.push(pno);
+      if (prevMonthNos.has(pno)) matched.push(pno);
       else newOnes.push(pno);
     }
 
     return {
-      total_registered: existingNos.size,
+      previous_month,
+      has_previous_snapshot,
+      total_registered: prevMonthNos.size,
       matched_count: matched.length,
       new_count: newOnes.length,
       new_product_nos: newOnes.slice(0, 50),
+      prev_rental_count,
     };
   });
 
