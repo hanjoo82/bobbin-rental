@@ -149,6 +149,8 @@ function AssetHero({ ownerName, data, loading, onOpen }: {
     : "전월";
   const showAssetGrowth = !!data?.hasPriorMonth && assetsDelta > 0;
   const showAssetDecline = !!data?.hasPriorMonth && assetsDelta < 0;
+  const rentalRateDeltaPp = data?.month?.rentalRateDeltaPp ?? 0;
+  const prevRentalRatePct = (data?.month?.prevRentalRate ?? 0) * 100;
 
   return (
     <section
@@ -214,8 +216,18 @@ function AssetHero({ ownerName, data, loading, onOpen }: {
               <span className="font-display text-2xl font-semibold tabular-nums">
                 {rentalRate.toFixed(1)}<span className="text-white/40 text-base">%</span>
               </span>
+              {!loading && data?.hasPriorMonth && rentalRateDeltaPp !== 0 && (
+                <span className={`inline-flex items-center gap-0.5 text-[11px] font-medium tabular-nums ${
+                  rentalRateDeltaPp > 0 ? "text-emerald-300" : "text-rose-300"
+                }`}>
+                  {rentalRateDeltaPp > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {rentalRateDeltaPp > 0 ? "+" : ""}{rentalRateDeltaPp.toFixed(1)}%p
+                </span>
+              )}
             </div>
-            <span className="text-[11px] text-white/40">현재 스냅샷 기준</span>
+            <span className="text-[11px] text-white/40 tabular-nums">
+              {data?.hasPriorMonth ? `${prevMonthLabel} ${prevRentalRatePct.toFixed(1)}%` : "현재 스냅샷 기준"}
+            </span>
           </div>
           <div className="h-3 rounded-full overflow-hidden bg-white/10 flex">
             <div className="h-full transition-all duration-700"
