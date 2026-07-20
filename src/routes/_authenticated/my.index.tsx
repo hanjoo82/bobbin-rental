@@ -13,6 +13,7 @@ import {
   Sparkles, ArrowUpRight, TrendingUp, TrendingDown, Clock, RefreshCw,
   Repeat, UserPlus, ChevronRight, Building2, Truck, Warehouse, PackageX, Ruler,
 } from "lucide-react";
+import { formatSnapshotDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/my/")({
   component: MyDashboard,
@@ -560,7 +561,7 @@ function NewRentersSheet({ open, onClose, data }: { open: boolean; onClose: () =
           <div key={r.name} className="flex items-center justify-between px-3 py-2.5">
             <span className="font-medium text-sm truncate">{r.name}</span>
             <span className="text-xs text-muted-foreground tabular-nums">
-              {new Date(r.firstAt).toLocaleDateString("ko-KR")}
+              {formatSnapshotDate(r.firstAt)}
             </span>
           </div>
         ))}

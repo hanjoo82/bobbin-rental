@@ -113,13 +113,20 @@ export const renterProfiles = createServerFn({ method: "GET" })
     );
 
     // history for last rental start per product + first-ever rental per renter
+    // changed_at은 월말 스냅샷용, 실제 등록시각은 upload_batches.created_at
     const yearAgo = new Date();
     yearAgo.setFullYear(yearAgo.getFullYear() - 2);
-    const history = await fetchAllRows<{ product_id: string; status_category: string; renter_name: string | null; changed_at: string }>(
+    const history = await fetchAllRows<{
+      product_id: string;
+      status_category: string;
+      renter_name: string | null;
+      changed_at: string;
+      batch_id: string | null;
+    }>(
       () => {
         let q = context.supabase
           .from("product_status_history")
-          .select("product_id, status_category, renter_name, changed_at")
+          .select("product_id, status_category, renter_name, changed_at, batch_id")
           .gte("changed_at", yearAgo.toISOString())
           .order("changed_at", { ascending: true });
         if (data.owner_id) q = q.eq("owner_id", data.owner_id);
@@ -127,13 +134,36 @@ export const renterProfiles = createServerFn({ method: "GET" })
       },
     );
 
+    const batchIds = [...new Set((history ?? []).map((h) => h.batch_id).filter(Boolean) as string[])];
+    const batchCreatedAt = new Map<string, number>();
+    const PAGE = 1000;
+    for (let i = 0; i < batchIds.length; i += PAGE) {
+      const chunk = batchIds.slice(i, i + PAGE);
+      const { data: batches, error } = await context.supabase
+        .from("upload_batches")
+        .select("id, created_at")
+        .in("id", chunk);
+      if (error) throw new Error(error.message);
+      for (const b of batches ?? []) {
+        batchCreatedAt.set(b.id as string, new Date(b.created_at as string).getTime());
+      }
+    }
+
+    /** 실제 업로드/등록 시각. batch 없으면 월말 changed_at fallback */
+    const eventAt = (h: { changed_at: string; batch_id: string | null }) => {
+      if (h.batch_id && batchCreatedAt.has(h.batch_id)) {
+        return new Date(batchCreatedAt.get(h.batch_id)!);
+      }
+      return new Date(h.changed_at);
+    };
+
     const firstSeen = new Map<string, Date>();
     const lastSeen = new Map<string, Date>();
     const lastRentalStart = new Map<string, Date>(); // product_id -> most recent rental start
     for (const h of history ?? []) {
       if (h.status_category !== "rental") continue;
       const name = ((h.renter_name as string) ?? "").trim();
-      const at = new Date(h.changed_at as string);
+      const at = eventAt(h);
       if (name) {
         if (!firstSeen.has(name) || at < firstSeen.get(name)!) firstSeen.set(name, at);
         if (!lastSeen.has(name) || at > lastSeen.get(name)!) lastSeen.set(name, at);

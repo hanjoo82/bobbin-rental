@@ -136,17 +136,41 @@ export const assetOps = createServerFn({ method: "GET" })
 
     const histSince = new Date();
     histSince.setFullYear(histSince.getFullYear() - 2);
-    const history = await fetchAllRows<{ product_id: string; status_category: string; renter_name: string | null; changed_at: string }>(
+    const history = await fetchAllRows<{
+      product_id: string;
+      status_category: string;
+      renter_name: string | null;
+      changed_at: string;
+      batch_id: string | null;
+    }>(
       () => {
         let q = context.supabase
           .from("product_status_history")
-          .select("product_id, status_category, renter_name, changed_at")
+          .select("product_id, status_category, renter_name, changed_at, batch_id")
           .gte("changed_at", histSince.toISOString())
           .order("changed_at", { ascending: true });
         if (data.owner_id) q = q.eq("owner_id", data.owner_id);
         return q;
       },
     );
+
+    const batchIds = [...new Set((history ?? []).map((h) => h.batch_id).filter(Boolean) as string[])];
+    const batchCreatedAt = new Map<string, number>();
+    for (let i = 0; i < batchIds.length; i += 1000) {
+      const chunk = batchIds.slice(i, i + 1000);
+      const { data: batches, error } = await context.supabase
+        .from("upload_batches")
+        .select("id, created_at")
+        .in("id", chunk);
+      if (error) throw new Error(error.message);
+      for (const b of batches ?? []) {
+        batchCreatedAt.set(b.id as string, new Date(b.created_at as string).getTime());
+      }
+    }
+    const eventAtMs = (h: { changed_at: string; batch_id: string | null }) => {
+      if (h.batch_id && batchCreatedAt.has(h.batch_id)) return batchCreatedAt.get(h.batch_id)!;
+      return new Date(h.changed_at).getTime();
+    };
 
     const total = products?.length ?? 0;
     const now = new Date();
@@ -204,6 +228,7 @@ export const assetOps = createServerFn({ method: "GET" })
 
     for (const h of history ?? []) {
       const t = new Date(h.changed_at as string).getTime();
+      const registeredAt = eventAtMs(h);
       const ym = utcYm(h.changed_at as string);
       const pid = h.product_id as string;
       if (!monthSnaps.has(ym)) monthSnaps.set(ym, new Map());
@@ -217,11 +242,11 @@ export const assetOps = createServerFn({ method: "GET" })
         });
       }
       if (h.status_category === "rental") {
-        const dt = new Date(h.changed_at as string);
+        const dt = new Date(registeredAt);
         const prevStart = lastRentalStart.get(pid);
         if (!prevStart || dt > prevStart) lastRentalStart.set(pid, dt);
         const n = ((h.renter_name as string) ?? "").trim();
-        if (n && !firstSeenRenter.has(n)) firstSeenRenter.set(n, t);
+        if (n && !firstSeenRenter.has(n)) firstSeenRenter.set(n, registeredAt);
       }
     }
 

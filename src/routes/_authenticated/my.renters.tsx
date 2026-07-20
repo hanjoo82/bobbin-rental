@@ -7,6 +7,7 @@ import { useOwnerScope } from "@/lib/owner-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Building2, Sparkles, AlertCircle, MapPin } from "lucide-react";
+import { formatSnapshotDate } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/my/renters")({
   component: MyRenters,
@@ -34,7 +35,7 @@ function RentersPanel() {
   const fetch = useServerFn(renterProfiles);
   const { ownerId } = useOwnerScope();
   const { data, isLoading } = useQuery({
-    queryKey: ["my-renter-profiles-v2", ownerId ?? "all"],
+    queryKey: ["my-renter-profiles-v4", ownerId ?? "all"],
     queryFn: () => fetch({ data: ownerId ? { owner_id: ownerId } : {} }),
   });
 
@@ -137,7 +138,7 @@ function RentersPanel() {
                           <h3 className="font-semibold truncate">{p.name}</h3>
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          첫 거래 {p.firstSeen ? new Date(p.firstSeen).toLocaleDateString("ko-KR") : "—"}
+                          첫 거래 {formatSnapshotDate(p.firstSeen)}
                         </div>
                       </div>
                       <div className="text-right shrink-0">
